@@ -186,7 +186,11 @@ return view('login', ['title' => 'Not found', 'user' => $user]);
 function view(string $name, array $vars): void
 {
     $vars['user'] ??= null;
-    $GLOBALS['app'] = $GLOBALS['app']; // keep reference for views that read it
+    // Inject isAdmin automatically so the layout's Users link works everywhere.
+    if (!array_key_exists('isAdmin', $vars) && isset($GLOBALS['app']) && $vars['user'] !== null) {
+        $vars['isAdmin'] = $GLOBALS['app']->auth->isAdmin($vars['user']);
+    }
+    $vars['isAdmin'] ??= false;
 
     // Capture the inner view body.
     ob_start();

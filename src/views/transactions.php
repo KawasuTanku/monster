@@ -62,7 +62,7 @@ use function Monster\csrfToken;
                 <td class="num <?= moneyClass($t->signed()) ?>">$<?= money($t->amount) ?></td>
                 <td class="muted"><?= e($t->note) ?></td>
                 <td class="row-actions">
-                    <a href="/transactions/edit?id=<?= e($t->id) ?>">edit</a>
+                    <a href="/transactions?edit=<?= e($t->id) ?>">edit</a>
                     <form method="post" action="/transactions/delete" class="inline">
                         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
                         <input type="hidden" name="id" value="<?= e($t->id) ?>">

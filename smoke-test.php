@@ -69,6 +69,16 @@ function assertHas(string $haystack, string $needle, string $label): void
     }
 }
 
+function assertMissing(string $haystack, string $needle, string $label): void
+{
+    if (str_contains($haystack, $needle)) {
+        fwrite(STDERR, "  FAIL- $label (unexpected: $needle)\n");
+        global $failed; $failed = true;
+    } else {
+        echo "  ok  - $label\n";
+    }
+}
+
 $failed = false;
 echo "Running smoke test against $base\n";
 
@@ -145,6 +155,20 @@ if (preg_match('/name="csrf" value="([^"]+)"/', $usersPage, $m)) { $csrfU = $m[1
 curl("$base/users/create", $cookie, 'POST', ['csrf' => $csrfU, 'user' => 'alice', 'pass' => 'alicepass1', 'role' => 'member']);
 $usersAfter = curl("$base/users", $cookie);
 assertHas($usersAfter, 'alice', 'users page lists newly created member alice');
+
+// 12b) REGRESSION: admin's dashboard must show the Users nav link (isAdmin injected).
+$dashAdmin = curl("$base/dashboard", $cookie);
+assertHas($dashAdmin, 'href="/users"', 'dashboard shows Users nav link for admin');
+
+// 12c) REGRESSION: clicking an edit link must open the edit form, not a login page.
+// Grab a transaction id from the transactions page, then hit its edit URL.
+$txnList = curl("$base/transactions", $cookie);
+preg_match('/href="\/transactions\?edit=([^"]+)"/', $txnList, $mt);
+$editId = $mt[1] ?? '';
+assertHas($editId !== '' ? 'ok' : '', 'ok', 'transactions page has edit links');
+$editPage = curl("$base/transactions?edit=" . urlencode($editId), $cookie);
+assertHas($editPage, 'Save changes', 'edit link opens the edit form (not login)');
+assertMissing($editPage, 'Sign in', 'edit page is not a login redirect');
 
 // 13) Member alice can log in and record a transaction.
 $jarA = tempnam(sys_get_temp_dir(), 'monster_alice_');
