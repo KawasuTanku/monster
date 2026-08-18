@@ -51,7 +51,7 @@ use function Monster\itemLabel;
                 <input type="number" step="1" min="0" name="qty" id="qty" value="<?= $edit ? e((string) $edit->qty) : '1' ?>">
             </label>
         </div>
-        <p class="muted">Linking a sale auto-fills the amount (price × qty) and decrements stock on save.</p>
+        <p class="muted">Linking auto-fills the amount: a sale uses price × qty (and decrements stock), an expense uses cost × qty (and adds stock) — both in one entry.</p>
     </details>
     <div class="actions">
         <button type="submit"><?= $edit ? 'Save changes' : 'Add transaction' ?></button>
@@ -76,16 +76,16 @@ use function Monster\itemLabel;
     function refill(){
         var opt = sel.options[sel.selectedIndex];
         if (!opt || !opt.value) return;
-        var price = parseFloat(opt.getAttribute('data-price'));
         var n = Math.max(0, parseInt(qty.value || '1', 10) || 0);
-        if (!isNaN(price)) {
-            var amt = document.querySelector('input[name="amount"]');
-            if (amt) amt.value = (price * n).toFixed(2);
-        }
+        var amt = form.querySelector('input[name="amount"]');
         var type = form.querySelector('select[name="type"]');
-        if (type) type.value = 'sale';
         var cat = form.querySelector('input[name="category"]');
-        if (cat && cat.value.trim() === '') cat.value = 'Retail';
+        var isExpense = type && type.value === 'expense';
+        var unit = isExpense ? parseFloat(opt.getAttribute('data-cost')) : parseFloat(opt.getAttribute('data-price'));
+        if (!isNaN(unit) && amt) {
+            amt.value = (unit * n).toFixed(2);
+        }
+        if (cat && cat.value.trim() === '') cat.value = isExpense ? 'Wholesale' : 'Retail';
     }
     sel.addEventListener('change', refill);
     qty.addEventListener('input', refill);

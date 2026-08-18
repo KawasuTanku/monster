@@ -285,6 +285,34 @@ curl("$base/transactions/save", $cookie, 'POST', [
 $invSale = curl("$base/inventory", $cookie);
 assertHas($invSale, '$168.00', 'stock value = 12 x 14 = 168 after linked sale of 2');
 
+// 12h) Linked EXPENSE adds stock (the "restock via transaction" path): record a
+// cost-type transaction linked to the item; stock should rise by qty, and the
+// amount should be cost x qty. A linked expense reuses the restock->COGS model.
+curl("$base/transactions/save", $cookie, 'POST', [
+    'csrf' => $csrfT, 'id' => '', 'type' => 'expense', 'amount' => '140.00',
+    'date' => '2026-08-14', 'category' => 'Wholesale', 'note' => 'linked restock',
+    'itemId' => $invId, 'qty' => '10',
+]);
+$invExp = curl("$base/inventory", $cookie);
+assertHas($invExp, '$308.00', 'stock value = 22 x 14 = 308 after linked expense of 10');
+$repExp = curl("$base/report", $cookie);
+assertHas($repExp, 'linked restock', 'linked expense appears in report');
+assertHas($repExp, '$140.00', 'linked expense amount = 10 x 14 = 140 logged');
+
+// Delete the linked expense -> stock should drop back by 10 (22 -> 12).
+// The row's edit link sits AFTER its note cell, so find the first edit link past "linked restock".
+$txnList = curl("$base/transactions", $cookie);
+$expId = '';
+$pos = strpos($txnList, 'linked restock');
+if ($pos !== false && preg_match('/href="\/transactions\?edit=([^"]+)"/', substr($txnList, $pos), $mm)) {
+    $expId = $mm[1];
+}
+if ($expId !== '') {
+    curl("$base/transactions/delete", $cookie, 'POST', ['csrf' => $csrfT, 'id' => $expId]);
+}
+$invExpDel = curl("$base/inventory", $cookie);
+assertHas($invExpDel, '$168.00', 'stock value back to 12 x 14 = 168 after deleting linked expense');
+
 // Delete it.
 curl("$base/inventory/delete", $cookie, 'POST', ['csrf' => $csrfInv, 'id' => $invId]);
 $invDel = curl("$base/inventory", $cookie);

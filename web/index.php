@@ -99,17 +99,25 @@ if ($uri === '/transactions/save' && $method === 'POST') {
     $t->date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_POST['date'] ?? '') ? $_POST['date'] : date('Y-m-d');
     $t->createdAt = time();
 
-    // Optional inventory linkage: a new sale linked to an item decrements stock.
+    // Optional inventory linkage: a new sale linked to an item decrements stock,
+    // a new expense linked to an item adds stock (the "restock via transaction" path).
     $linkedItemId = trim($_POST['itemId'] ?? '');
     $linkedQty = max(0.0, (float) ($_POST['qty'] ?? 1));
     if (!$isEdit) {
         $t->itemId = $linkedItemId;
         $t->qty = $linkedQty;
-        if ($linkedItemId !== '' && $t->type === Transaction::TYPE_SALE) {
+        if ($linkedItemId !== '') {
             $item = $app->inv->find($linkedItemId);
             if ($item !== null) {
-                $item->qtyOnHand = max(0, $item->qtyOnHand - (int) round($linkedQty));
-                $app->inv->save($item);
+                $delta = (int) round($linkedQty);
+                if ($t->type === Transaction::TYPE_SALE) {
+                    $item->qtyOnHand = max(0, $item->qtyOnHand - $delta);
+                } elseif ($t->type === Transaction::TYPE_EXPENSE) {
+                    $item->qtyOnHand += $delta;
+                }
+                if ($delta !== 0) {
+                    $app->inv->save($item);
+                }
             }
         }
     }
@@ -122,11 +130,17 @@ if ($uri === '/transactions/save' && $method === 'POST') {
 if ($uri === '/transactions/delete' && $method === 'POST') {
     if (csrfValid($_POST['csrf'] ?? null)) {
         $t = $app->txns->find($_POST['id'] ?? '');
-        // Restore stock when deleting a sale that was linked to an inventory item.
-        if ($t !== null && $t->itemId !== '' && $t->type === Transaction::TYPE_SALE) {
+        // Reverse the stock impact when deleting a linked transaction:
+        // deleting a linked sale restores the units sold; deleting a linked expense removes the units added.
+        if ($t !== null && $t->itemId !== '') {
             $item = $app->inv->find($t->itemId);
             if ($item !== null) {
-                $item->qtyOnHand += (int) round($t->qty);
+                $delta = (int) round($t->qty);
+                if ($t->type === Transaction::TYPE_SALE) {
+                    $item->qtyOnHand += $delta;
+                } elseif ($t->type === Transaction::TYPE_EXPENSE) {
+                    $item->qtyOnHand = max(0, $item->qtyOnHand - $delta);
+                }
                 $app->inv->save($item);
             }
         }
