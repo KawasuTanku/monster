@@ -11,7 +11,7 @@ use function Monster\money;
 
 <form method="post" action="/backup/create" class="inline">
     <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
-    <button type="submit">Download current backup</button>
+    <button type="submit">Create backup snapshot</button>
 </form>
 
 <table class="table">

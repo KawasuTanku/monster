@@ -4,6 +4,7 @@ declare(strict_types=1);
 /** @var string $me */
 use function Monster\e;
 use function Monster\trashIcon;
+use function Monster\keyIcon;
 use function Monster\csrfToken;
 ?>
 <h1>Users</h1>
@@ -48,7 +49,7 @@ use function Monster\csrfToken;
             <td class="row-actions">
                 <?php if ($u['username'] !== $me): ?>
                     <details class="reset">
-                        <summary class="link">reset</summary>
+                        <summary class="link icon-btn" title="Reset password" aria-label="Reset password"><?= keyIcon() ?></summary>
                         <form method="post" action="/users/reset" class="inline">
                             <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
                             <input type="hidden" name="user" value="<?= e($u['username']) ?>">

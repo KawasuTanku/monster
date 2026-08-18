@@ -23,8 +23,14 @@ $descriptor = [
     1 => ['pipe', 'w'],
     2 => ['pipe', 'w'],
 ];
-// Override data dir by injecting an env-aware App: simplest is to symlink data_test as data/ during test.
-@unlink($root . '/data');
+// Point the app's hardcoded data/ at our throwaway dir. Remove any existing
+// data/ or symlink first so the symlink is reliably created each run.
+if (is_link($root . '/data')) {
+    @unlink($root . '/data');
+} elseif (is_dir($root . '/data')) {
+    array_map('unlink', glob($root . '/data/*') ?: []);
+    @rmdir($root . '/data');
+}
 symlink($testData, $root . '/data');
 
 $proc = proc_open(PHP_BINARY . " -S $host " . escapeshellarg($root . '/web/index.php'), $descriptor, $pipes);
@@ -302,12 +308,16 @@ assertHas($repExp, 'linked restock', 'linked expense appears in report');
 assertHas($repExp, '$140.00', 'linked expense amount = 10 x 14 = 140 logged');
 
 // Delete the linked expense -> stock should drop back by 10 (22 -> 12).
-// The row's edit link sits AFTER its note cell, so find the first edit link past "linked restock".
+// Resolve the transaction id from the data store directly (immune to list
+// ordering / date-sorting), rather than scraping the HTML table.
 $txnList = curl("$base/transactions", $cookie);
 $expId = '';
-$pos = strpos($txnList, 'linked restock');
-if ($pos !== false && preg_match('/href="\/transactions\?edit=([^"]+)"/', substr($txnList, $pos), $mm)) {
-    $expId = $mm[1];
+$store = json_decode((string) @file_get_contents($root . '/data_test/db.json'), true) ?: [];
+foreach ($store['transactions'] ?? [] as $tx) {
+    if (($tx['note'] ?? '') === 'linked restock' && ($tx['itemId'] ?? '') !== '') {
+        $expId = $tx['id'];
+        break;
+    }
 }
 if ($expId !== '') {
     curl("$base/transactions/delete", $cookie, 'POST', ['csrf' => $csrfT, 'id' => $expId]);
@@ -413,7 +423,13 @@ else {
     assertHas(($db2['settings']['user'] ?? null) === null ? 'ok' : '', 'ok', 'legacy settings.user cleared after migration');
     proc_terminate($proc2);
 }
-@unlink($root . '/data');
+// Clean up the data/ symlink (or directory) so a subsequent run starts fresh.
+if (is_link($root . '/data')) {
+    @unlink($root . '/data');
+} elseif (is_dir($root . '/data')) {
+    array_map('unlink', glob($root . '/data/*') ?: []);
+    @rmdir($root . '/data');
+}
 foreach (glob($migDir . '/*') ?: [] as $f) {
     if (is_file($f)) { @unlink($f); }
 }

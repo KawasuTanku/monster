@@ -84,8 +84,18 @@ function itemLabel(?\Monster\InventoryItem $item, string $fallback = ''): string
     return $label;
 }
 
-/** Inline trash-can icon for delete affordances. Solid fill so it renders reliably
- *  regardless of color inheritance; explicit red so it never depends on currentColor. @return string */
+/** Inline key icon for password-reset affordances. Explicit black stroke so it
+ *  renders reliably and stays consistent with the black trash icon. @return string */
+function keyIcon(): string
+{
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" '
+        . 'class="icon-key" aria-hidden="true" focusable="false" fill="none" stroke="#000" '
+        . 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" '
+        . 'd="M14 8a4 4 0 1 0-3.46 3.96L6 16.5V19a1 1 0 0 0 1 1h1.5v1.5a1 1 0 0 0 1 1H11v-2h2l3.5-3.5A4 4 0 0 0 14 8z'
+        . 'M12.5 9.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>';
+}
+
+/**
 function trashIcon(): string
 {
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" '
