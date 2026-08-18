@@ -111,6 +111,32 @@ final class Auth
         $this->storage->put(self::USERS_KEY, $u);
     }
 
+    /**
+     * Admin-initiated password reset for another user. Sets a new password and
+     * clears any active login lock so the reset takes effect immediately.
+     * @throws \InvalidArgumentException if the user does not exist or password too short.
+     */
+    public function adminResetPassword(string $username, string $password): void
+    {
+        if (strlen($password) < 8) {
+            throw new \InvalidArgumentException('Password must be at least 8 characters.');
+        }
+        $this->setPassword($username, $password);
+        // Clear any brute-force lock on this user (and their IP bucket) so the
+        // freshly set password isn't blocked by a stale lockout.
+        $t = $this->throttle();
+        $changed = false;
+        foreach (['byUser' => strtolower(trim($username)), 'byIp' => $this->clientIp()] as $bucket => $name) {
+            if (isset($t[$bucket][$name])) {
+                unset($t[$bucket][$name]);
+                $changed = true;
+            }
+        }
+        if ($changed) {
+            $this->saveThrottle($t);
+        }
+    }
+
     /** Change a user's role (admins only). Cannot demote the last remaining admin. */
     public function setRole(string $username, string $role): void
     {

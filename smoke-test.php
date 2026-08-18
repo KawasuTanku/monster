@@ -156,6 +156,25 @@ curl("$base/users/create", $cookie, 'POST', ['csrf' => $csrfU, 'user' => 'alice'
 $usersAfter = curl("$base/users", $cookie);
 assertHas($usersAfter, 'alice', 'users page lists newly created member alice');
 
+// 12a) REGRESSION: admin can reset another user's password.
+// Use a throwaway user (bob) so we don't disturb alice, who is exercised later.
+$csrfB = '';
+if (preg_match('/name="csrf" value="([^"]+)"/', $usersAfter, $m)) { $csrfB = $m[1]; }
+curl("$base/users/create", $cookie, 'POST', ['csrf' => $csrfB, 'user' => 'bob', 'pass' => 'bobpass123', 'role' => 'member']);
+// Reset bob's password to a new value.
+curl("$base/users/reset", $cookie, 'POST', ['csrf' => $csrfB, 'user' => 'bob', 'pass' => 'bobNEWpass9']);
+// Bob must now log in with the NEW password (fresh jar).
+$jarB = tempnam(sys_get_temp_dir(), 'monster_bob_');
+$rB = curl("$base/login", $jarB, 'POST', ['user' => 'bob', 'pass' => 'bobNEWpass9']);
+assertHas($rB, 'Dashboard', 'bob logs in with admin-reset password');
+@unlink($jarB);
+// The OLD password must be rejected — checked with a SEPARATE fresh jar so we
+// don't accidentally carry a live session (which would redirect /login -> Dashboard).
+$jarBold = tempnam(sys_get_temp_dir(), 'monster_bold_');
+$rBold = curl("$base/login", $jarBold, 'POST', ['user' => 'bob', 'pass' => 'bobpass123']);
+assertHas($rBold, 'Invalid credentials', 'bob old password rejected after reset');
+@unlink($jarBold);
+
 // 12b) REGRESSION: admin's dashboard must show the Users nav link (isAdmin injected).
 $dashAdmin = curl("$base/dashboard", $cookie);
 assertHas($dashAdmin, 'href="/users"', 'dashboard shows Users nav link for admin');

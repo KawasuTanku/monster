@@ -46,6 +46,15 @@ use function Monster\csrfToken;
             <td class="muted"><?= e(date('Y-m-d', (int) ($u['createdAt'] ?? 0))) ?></td>
             <td class="row-actions">
                 <?php if ($u['username'] !== $me): ?>
+                    <details class="reset">
+                        <summary class="link">reset</summary>
+                        <form method="post" action="/users/reset" class="inline">
+                            <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
+                            <input type="hidden" name="user" value="<?= e($u['username']) ?>">
+                            <input type="password" name="pass" minlength="8" placeholder="new password" required>
+                            <button type="submit" class="link">set</button>
+                        </form>
+                    </details>
                     <form method="post" action="/users/delete" class="inline">
                         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
                         <input type="hidden" name="user" value="<?= e($u['username']) ?>">

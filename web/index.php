@@ -180,6 +180,17 @@ if (str_starts_with($uri, '/users')) {
         }
         header('Location: /users'); exit;
     }
+    if ($uri === '/users/reset' && $method === 'POST') {
+        if (csrfValid($_POST['csrf'] ?? null) && ($_POST['user'] ?? '') !== $user) {
+            try {
+                $app->auth->adminResetPassword($_POST['user'] ?? '', $_POST['pass'] ?? '');
+                setFlash('Password reset for ' . $_POST['user'] . '.');
+            } catch (\InvalidArgumentException $e) {
+                setFlash($e->getMessage());
+            }
+        }
+        header('Location: /users'); exit;
+    }
 }
 
 http_response_code(404);

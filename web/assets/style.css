@@ -58,6 +58,11 @@ body {
 .link { background: none; border: none; color: var(--neg); cursor: pointer; padding: 0; font-size: 1rem; }
 .link.danger { color: var(--neg); }
 .inline { display: inline; }
+details.reset { display: inline-block; }
+details.reset > summary { list-style: none; cursor: pointer; color: var(--accent); }
+details.reset > summary::-webkit-details-marker { display: none; }
+details.reset form { display: inline-flex; gap: 0.25rem; align-items: center; }
+details.reset input[type="password"] { width: 9rem; padding: 0.2rem 0.4rem; font-size: 0.9rem; }
 
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin: 1rem 0; }
 .card.danger-zone { border-color: #5a2a2a; }
