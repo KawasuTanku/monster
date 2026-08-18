@@ -5,9 +5,11 @@
 	order php_server before file_server
 }
 
-# HTTP on 8080 -> permanently redirect to HTTPS on 8443
+# HTTP on 8080 -> redirect monster.kawasu.wtf to HTTPS on 8443.
+# Scoped to this host so other sites you add on :8080 are unaffected.
 :8080 {
-	redir https://monster.kawasu.wtf:8443{uri} permanent
+	@monster host monster.kawasu.wtf
+	redir @monster https://monster.kawasu.wtf:8443{uri} permanent
 }
 
 # HTTPS on 8443 with a FrankenPHP-managed internal (self-signed) cert
