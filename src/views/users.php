@@ -3,6 +3,7 @@ declare(strict_types=1);
 /** @var list<array<string, mixed>> $users */
 /** @var string $me */
 use function Monster\e;
+use function Monster\trashIcon;
 use function Monster\csrfToken;
 ?>
 <h1>Users</h1>
@@ -58,7 +59,7 @@ use function Monster\csrfToken;
                     <form method="post" action="/users/delete" class="inline">
                         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
                         <input type="hidden" name="user" value="<?= e($u['username']) ?>">
-                        <button type="submit" class="link danger" onclick="return confirm('Remove user <?= e($u['username']) ?>?')">remove</button>
+                        <button type="submit" class="link danger icon-btn" title="Remove user <?= e($u['username']) ?>" aria-label="Remove user <?= e($u['username']) ?>" onclick="return confirm('Remove user <?= e($u['username']) ?>?')"><?= trashIcon() ?></button>
                     </form>
                 <?php else: ?>
                     <span class="muted">—</span>
