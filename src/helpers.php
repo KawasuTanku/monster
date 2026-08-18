@@ -84,13 +84,14 @@ function itemLabel(?\Monster\InventoryItem $item, string $fallback = ''): string
     return $label;
 }
 
-/** Inline trash-can icon (uses currentColor) for delete affordances. @return string */
+/** Inline trash-can icon for delete affordances. Solid fill so it renders reliably
+ *  regardless of color inheritance; explicit red so it never depends on currentColor. @return string */
 function trashIcon(): string
 {
-    return '<svg viewBox="0 0 24 24" width="16" height="16" class="icon-trash" aria-hidden="true" focusable="false">'
-        . '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" '
-        . 'd="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7'
-        . 'M10 11v6M14 11v6"/></svg>';
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" '
+        . 'class="icon-trash" aria-hidden="true" focusable="false" fill="#f85149">'
+        . '<path d="M6 7h12l-1 13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7zm3-3h6l1 2H8l1-2z'
+        . 'M4 6h16v1H4V6zM9 10h1v8H9v-8zm5 0h1v8h-1v-8z"/></svg>';
 }
 
 /**
