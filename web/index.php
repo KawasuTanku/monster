@@ -38,7 +38,13 @@ if ($uri === '/setup' && !$app->auth->isConfigured()) {
 if ($uri === '/login') {
     if ($app->auth->check()) { header('Location: /dashboard'); exit; }
     if ($method === 'POST') {
-        if ($app->auth->login(trim($_POST['user'] ?? ''), $_POST['pass'] ?? '')) {
+        $u = trim($_POST['user'] ?? '');
+        $locked = $app->auth->isLocked($u);
+        if ($locked !== null) {
+            $msg = 'Too many failed attempts. Try again after ' . date('H:i', $locked) . '.';
+            return view('login', ['title' => 'Sign in', 'error' => $msg, 'setup' => false]);
+        }
+        if ($app->auth->login($u, $_POST['pass'] ?? '')) {
             header('Location: /dashboard'); exit;
         }
         return view('login', ['title' => 'Sign in', 'error' => 'Invalid credentials.', 'setup' => false]);

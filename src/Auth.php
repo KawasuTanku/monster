@@ -144,6 +144,111 @@ final class Auth
         $this->storage->delete(self::USERS_KEY, $username);
     }
 
+    // ---- Brute-force protection (login rate limiting) ----
+    private const MAX_ATTEMPTS = 5;     // allowed failures per window
+    private const WINDOW = 900;         // 15 minutes
+    private const LOCK = 900;           // lockout duration: 15 minutes
+
+    /** Best-effort client IP, honoring a reverse proxy's X-Forwarded-For. */
+    private function clientIp(): string
+    {
+        $fwd = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
+        if (($fwd = trim(explode(',', $fwd)[0] ?? '')) !== '') {
+            return $fwd;
+        }
+        return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    }
+
+    private function throttle(): array
+    {
+        $t = $this->storage->getSetting('throttle');
+        if (!is_array($t)) {
+            $t = ['byUser' => [], 'byIp' => []];
+        }
+        return $t;
+    }
+
+    private function saveThrottle(array $t): void
+    {
+        $this->storage->setSetting('throttle', $t);
+    }
+
+    /**
+     * Returns the Unix timestamp until which the given username (or its IP) is
+     * locked out, or null if not locked. Only an entry that carries an *expired
+     * lock* (until <= now) is pruned here — an in-progress failure counter is
+     * left untouched so attempts accumulate correctly.
+     */
+    public function isLocked(string $username): ?int
+    {
+        $username = strtolower(trim($username));
+        $ip = $this->clientIp();
+        $t = $this->throttle();
+        $now = time();
+        $changed = false;
+        $lockedUntil = null;
+
+        foreach (['byUser' => $username, 'byIp' => $ip] as $bucket => $key) {
+            if (!isset($t[$bucket][$key])) {
+                continue;
+            }
+            $entry = $t[$bucket][$key];
+            // A real lock exists only when 'until' is set and still in the future.
+            if (($entry['until'] ?? 0) > $now) {
+                $lockedUntil = max($lockedUntil ?? 0, $entry['until']);
+            } elseif (($entry['until'] ?? 0) > 0) {
+                // Lock has expired -> forget the whole entry.
+                unset($t[$bucket][$key]);
+                $changed = true;
+            }
+            // else: plain counter in progress -> leave it alone.
+        }
+        if ($changed) {
+            $this->saveThrottle($t);
+        }
+        return $lockedUntil;
+    }
+
+    private function registerFailure(string $username): void
+    {
+        $username = strtolower(trim($username));
+        $ip = $this->clientIp();
+        $t = $this->throttle();
+        $now = time();
+
+        foreach (['byUser' => $username, 'byIp' => $ip] as $bucket => $name) {
+            $entry = $t[$bucket][$name] ?? ['count' => 0, 'window' => 0, 'until' => 0];
+            // If the sliding window expired (and we're not in a hard lock), reset.
+            if (($entry['until'] ?? 0) <= $now && ($entry['window'] ?? 0) > 0 && $now - $entry['window'] > self::WINDOW) {
+                $entry = ['count' => 0, 'window' => 0, 'until' => 0];
+            }
+            $entry['count'] = ($entry['count'] ?? 0) + 1;
+            $entry['window'] = $entry['window'] ?? $now;
+            if ($entry['count'] >= self::MAX_ATTEMPTS) {
+                $entry['until'] = $now + self::LOCK;
+            }
+            $t[$bucket][$name] = $entry;
+        }
+        $this->saveThrottle($t);
+    }
+
+    private function registerSuccess(string $username): void
+    {
+        $username = strtolower(trim($username));
+        $ip = $this->clientIp();
+        $t = $this->throttle();
+        $changed = false;
+        foreach (['byUser' => $username, 'byIp' => $ip] as $bucket => $name) {
+            if (isset($t[$bucket][$name])) {
+                unset($t[$bucket][$name]);
+                $changed = true;
+            }
+        }
+        if ($changed) {
+            $this->saveThrottle($t);
+        }
+    }
+
     public function verify(string $username, string $password): bool
     {
         $u = $this->findUser($username);
@@ -176,12 +281,19 @@ final class Auth
 
     public function login(string $username, string $password): bool
     {
-        if (!$this->verify($username, $password)) {
+        $username = strtolower(trim($username));
+        // Refuse outright if this username or its IP is currently locked out.
+        if ($this->isLocked($username) !== null) {
             return false;
         }
+        if (!$this->verify($username, $password)) {
+            $this->registerFailure($username);
+            return false;
+        }
+        $this->registerSuccess($username);
         $this->startSession();
         session_regenerate_id(true);
-        $_SESSION[self::SESSION_KEY] = strtolower(trim($username));
+        $_SESSION[self::SESSION_KEY] = $username;
         return true;
     }
 

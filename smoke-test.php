@@ -191,6 +191,23 @@ $rBlock = curl("$base/users", $jarA);
 assertHas($rBlock, 'Forbidden', 'member blocked from /users');
 @unlink($jarA);
 
+// 15) REGRESSION: brute-force protection locks an account after MAX_ATTEMPTS.
+// Use a fresh jar so we don't disturb the admin session used above.
+$jarL = tempnam(sys_get_temp_dir(), 'monster_lock_');
+$lockMsgSeen = false;
+for ($i = 0; $i < 7; $i++) {
+    $r = curl("$base/login", $jarL, 'POST', ['user' => 'john', 'pass' => 'wrong' . $i]);
+    if (str_contains($r, 'Too many failed attempts')) {
+        $lockMsgSeen = true;
+        break;
+    }
+}
+assertHas($lockMsgSeen ? 'ok' : '', 'ok', 'account locks after repeated failures');
+// While locked, the correct password must also be rejected.
+$lockedStill = curl("$base/login", $jarL, 'POST', ['user' => 'john', 'pass' => 'supersecret']);
+assertHas($lockedStill, 'Too many failed attempts', 'correct password rejected while locked');
+@unlink($jarL);
+
 proc_terminate($proc);
 @unlink($root . '/data');
 array_map('unlink', glob($testData . '/*') ?: []);
