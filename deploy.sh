@@ -38,8 +38,9 @@ run_as() { if [[ "$(id -u)" -eq 0 ]]; then sudo -u frankenphp bash -c "$1"; else
 echo "==> Deploying monster to $DEST"
 
 if [[ -d "$DEST/.git" ]]; then
-    echo "==> Existing repo found — pulling latest"
-    run_as "cd '$DEST' && git pull --ff-only"
+    echo "==> Existing repo found — force-syncing to $REMOTE ($BRANCH)"
+    echo "    (tracked files are reset to match origin; untracked dirs like logs/ are kept)"
+    run_as "cd '$DEST' && (git remote set-url origin '$REMOTE' 2>/dev/null || git remote add origin '$REMOTE') && git fetch -q origin '$BRANCH' && git checkout -q -f -B '$BRANCH' origin/'$BRANCH'"
 elif [[ -d "$DEST" ]]; then
     echo "==> Path exists without a repo — initialising git and checking out $BRANCH"
     echo "    (existing untracked files such as logs/ are preserved)"
