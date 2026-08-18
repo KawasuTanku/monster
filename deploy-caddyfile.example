@@ -1,0 +1,19 @@
+{
+	http_port 8080
+	https_port 8443
+	frankenphp
+	order php_server before file_server
+}
+
+# HTTP on 8080 -> permanently redirect to HTTPS on 8443
+:8080 {
+	redir https://monster.kawasu.wtf:8443{uri} permanent
+}
+
+# HTTPS on 8443 with a FrankenPHP-managed internal (self-signed) cert
+monster.kawasu.wtf:8443 {
+	tls internal
+	root * /opt/caddy/monster.kawasu.wtf/web
+	php_server
+	file_server
+}
