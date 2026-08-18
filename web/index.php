@@ -193,6 +193,62 @@ if (str_starts_with($uri, '/users')) {
     }
 }
 
+// ---- Admin-only: backups ----
+if (str_starts_with($uri, '/backup')) {
+    if (!$isAdmin) {
+        http_response_code(403);
+        echo "<!doctype html><html><head><meta charset=\"utf-8\"><title>Forbidden</title></head>"
+            . "<body><h1>403 Forbidden</h1><p>Admin access required.</p></body></html>";
+        exit;
+    }
+    if ($uri === '/backup' && $method === 'GET') {
+        return view('backup', [
+            'title' => 'Backups', 'user' => $user, 'isAdmin' => $isAdmin,
+            'backups' => $app->backup->list(),
+            'storagePath' => $app->storage->path(),
+        ]);
+    }
+    if ($uri === '/backup/download' && $method === 'GET') {
+        // Download the most recent backup (or a specific one via ?file=).
+        $file = $_GET['file'] ?? null;
+        $path = $file !== null
+            ? $app->backup->dir() . '/' . basename($file)
+            : $app->backup->latest();
+        if ($path === null || !is_file($path)) {
+            http_response_code(404);
+            echo 'No backup available.';
+            exit;
+        }
+        header('Content-Type: application/json');
+        header('Content-Disposition: attachment; filename="' . basename($path) . '"');
+        readfile($path);
+        exit;
+    }
+    if ($uri === '/backup/create' && $method === 'POST') {
+        if (csrfValid($_POST['csrf'] ?? null)) {
+            try {
+                $p = $app->backup->create();
+                setFlash('Backup created: ' . basename($p));
+            } catch (\RuntimeException $e) {
+                setFlash($e->getMessage());
+            }
+        }
+        header('Location: /backup'); exit;
+    }
+    if ($uri === '/backup/restore' && $method === 'POST') {
+        if (csrfValid($_POST['csrf'] ?? null)) {
+            $src = $_POST['file'] ?? '';
+            try {
+                $app->backup->restore($app->backup->dir() . '/' . basename($src));
+                setFlash('Restored from ' . basename($src) . '.');
+            } catch (\InvalidArgumentException | \RuntimeException $e) {
+                setFlash($e->getMessage());
+            }
+        }
+        header('Location: /backup'); exit;
+    }
+}
+
 http_response_code(404);
 return view('login', ['title' => 'Not found', 'user' => $user]);
 

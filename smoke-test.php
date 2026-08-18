@@ -189,6 +189,26 @@ $editPage = curl("$base/transactions?edit=" . urlencode($editId), $cookie);
 assertHas($editPage, 'Save changes', 'edit link opens the edit form (not login)');
 assertMissing($editPage, 'Sign in', 'edit page is not a login redirect');
 
+// 12d) REGRESSION: admin can back up, download, and restore.
+$backupPage = curl("$base/backup", $cookie);
+assertHas($backupPage, 'Backups', 'admin can reach /backup');
+$csrfBk = '';
+if (preg_match('/name="csrf" value="([^"]+)"/', $backupPage, $m)) { $csrfBk = $m[1]; }
+// Create a manual backup.
+curl("$base/backup/create", $cookie, 'POST', ['csrf' => $csrfBk]);
+$backupPage2 = curl("$base/backup", $cookie);
+assertHas($backupPage2, 'monster-', 'manual backup listed after create');
+// Download it (follow nothing; just confirm we get JSON back).
+$dl = curl("$base/backup/download", $cookie);
+assertHas($dl, 'transactions', 'backup download returns store JSON');
+// Restore is exercised by posting the first listed backup file name.
+if (preg_match('/href="\/backup\/download\?file=([^"]+)"/', $backupPage2, $m2)) {
+    $fname = rawurldecode($m2[1]);
+    curl("$base/backup/restore", $cookie, 'POST', ['csrf' => $csrfBk, 'file' => $fname]);
+    $after = curl("$base/backup", $cookie);
+    assertHas($after, 'Restored from', 'restore reports success');
+}
+
 // 13) Member alice can log in and record a transaction.
 $jarA = tempnam(sys_get_temp_dir(), 'monster_alice_');
 $rA = curl("$base/login", $jarA, 'POST', ['user' => 'alice', 'pass' => 'alicepass1']);
@@ -229,7 +249,10 @@ assertHas($lockedStill, 'Too many failed attempts', 'correct password rejected w
 
 proc_terminate($proc);
 @unlink($root . '/data');
-array_map('unlink', glob($testData . '/*') ?: []);
+foreach (glob($testData . '/*') ?: [] as $f) {
+    if (is_file($f)) { @unlink($f); }
+}
+@rmdir($testData . '/backups');
 @rmdir($testData);
 @unlink($cookie);
 
@@ -280,7 +303,10 @@ else {
     proc_terminate($proc2);
 }
 @unlink($root . '/data');
-array_map('unlink', glob($migDir . '/*') ?: []);
+foreach (glob($migDir . '/*') ?: [] as $f) {
+    if (is_file($f)) { @unlink($f); }
+}
+@rmdir($migDir . '/backups');
 @rmdir($migDir);
 @unlink($cookie2);
 
