@@ -23,9 +23,18 @@
 #   MONSTER_DEST   default /opt/caddy/monster.kawasu.wtf
 #   MONSTER_REMOTE default https://github.com/KawasuTanku/monster.git
 #   MONSTER_BRANCH default main
-#   COMPOSER       default composer
+#   COMPOSER       default: COMPOSER env, then /opt/caddy/bin/composer.phar, then `composer` on PATH
 #
-set -euo pipefail
+
+# Resolve the composer executable. Honors an explicit $COMPOSER, then falls back
+# to /opt/caddy/bin/composer.phar (deployed alongside the app), then `composer`.
+if [[ -n "${COMPOSER:-}" ]]; then
+    COMPOSER_BIN="$COMPOSER"
+elif [[ -x /opt/caddy/bin/composer.phar ]]; then
+    COMPOSER_BIN="/opt/caddy/bin/composer.phar"
+else
+    COMPOSER_BIN="composer"
+fi
 
 REMOTE="${MONSTER_REMOTE:-https://github.com/KawasuTanku/monster.git}"
 DEST="${MONSTER_DEST:-/opt/caddy/monster.kawasu.wtf}"
@@ -51,7 +60,7 @@ else
 fi
 
 echo "==> Installing composer dependencies"
-run_as "cd '$DEST' && ${COMPOSER:-composer} install --no-dev --no-interaction --optimize-autoloader"
+run_as "cd '$DEST' && '$COMPOSER_BIN' install --no-dev --no-interaction --optimize-autoloader"
 
 echo "==> Preparing data directory"
 run_as "mkdir -p '$DEST/data' && chmod 750 '$DEST/data'"
