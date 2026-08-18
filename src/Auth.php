@@ -42,8 +42,8 @@ final class Auth
         $legacyHash = $this->storage->getSetting('password_hash');
         if (is_string($legacyUser) && $legacyUser !== '' && is_string($legacyHash)) {
             $this->storage->put(self::USERS_KEY, [
-                'id' => $legacyUser,
-                'username' => $legacyUser,
+                'id' => strtolower($legacyUser),
+                'username' => strtolower($legacyUser),
                 'password_hash' => $legacyHash,
                 'role' => self::ROLE_ADMIN,
                 'createdAt' => time(),
@@ -65,8 +65,10 @@ final class Auth
     public function findUser(string $username): ?array
     {
         $this->migrateLegacy();
+        $username = strtolower(trim($username));
         foreach ($this->users() as $u) {
-            if (($u['username'] ?? null) !== null && hash_equals($u['username'], $username)) {
+            $stored = strtolower(($u['username'] ?? ''));
+            if ($stored !== '' && hash_equals($stored, $username)) {
                 return $u;
             }
         }

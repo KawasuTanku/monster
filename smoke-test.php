@@ -244,7 +244,7 @@ $migDir = $root . '/data_mig';
 @mkdir($migDir, 0o750, true);
 $legacy = [
     'settings' => [
-        'user' => 'legacyboss',
+        'user' => 'LegacyBoss',
         'password_hash' => password_hash('legacypw99', PASSWORD_BCRYPT, ['cost' => 13]),
     ],
     'transactions' => [],
@@ -267,12 +267,13 @@ for ($i = 0; $i < 40; $i++) {
 if (!$ok2) { fwrite(STDERR, "FAIL: migration server did not start\n"); $failed = true; }
 else {
     echo "\nRunning legacy migration sub-test\n";
-    // Old owner logs in with their original password.
+    // Old owner logs in with their original password, typed in LOWERCASE
+    // (regression: case-insensitive username matching).
     $r = curl("$base2/login", $cookie2, 'POST', ['user' => 'legacyboss', 'pass' => 'legacypw99']);
-    assertHas($r, 'Dashboard', 'legacy single-user can still log in');
+    assertHas($r, 'Dashboard', 'legacy single-user can still log in (lowercase vs mixed-case stored)');
     // Should be admin and able to reach /users (migration promoted them).
     $u = curl("$base2/users", $cookie2);
-    assertHas($u, 'legacyboss', 'migrated user present in /users');
+    assertHas($u, 'legacyboss', 'migrated user present in /users (normalized to lowercase)');
     // The legacy settings keys should have been cleared.
     $db2 = json_decode(file_get_contents($root . '/data/db.json'), true);
     assertHas(($db2['settings']['user'] ?? null) === null ? 'ok' : '', 'ok', 'legacy settings.user cleared after migration');
