@@ -3,6 +3,7 @@ declare(strict_types=1);
 /** @var string $title */
 /** @var string $body  (rendered HTML fragment) */
 /** @var ?string $user */
+/** @var bool $isAdmin */
 use function Monster\e;
 ?>
 <!DOCTYPE html>
@@ -21,6 +22,7 @@ use function Monster\e;
             <a href="/dashboard">Dashboard</a>
             <a href="/transactions">Transactions</a>
             <a href="/report">Report</a>
+            <?php if (!empty($isAdmin)): ?><a href="/users">Users</a><?php endif; ?>
             <a href="/settings">Settings</a>
             <span class="user"><?= e($user) ?></span>
             <form method="post" action="/logout" class="logout">

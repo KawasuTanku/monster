@@ -114,9 +114,14 @@ $db = json_decode(file_get_contents($root . '/data/db.json'), true);
 assertHas(count($db['transactions'] ?? []) === 2 ? 'ok' : '', 'ok', 'two transactions persisted to db.json');
 
 // 8) Logout then protected route should not leak dashboard.
-curl("$base/logout", $cookie, 'POST', []);
-$after = curl("$base/dashboard", $cookie);
+// Use a throwaway jar so the primary admin jar ($cookie) stays authenticated
+// for the subsequent multi-user tests.
+$jarLogout = tempnam(sys_get_temp_dir(), 'monster_logout_');
+curl("$base/setup", $jarLogout, 'POST', ['user' => 'john', 'pass' => 'supersecret']);
+curl("$base/logout", $jarLogout, 'POST', []);
+$after = curl("$base/dashboard", $jarLogout);
 assertHas($after, 'Sign in', 'dashboard blocked after logout');
+@unlink($jarLogout);
 
 // 9) Relogin with correct creds works — fresh cookie jar, no prior session.
 $jar2 = tempnam(sys_get_temp_dir(), 'monster_cookie2_');
@@ -129,6 +134,39 @@ $r2 = curl("$base/login", $jar3, 'POST', ['user' => 'john', 'pass' => 'wrongpass
 assertHas($r2, 'Invalid credentials', 'wrong password rejected');
 @unlink($jar2); @unlink($jar3);
 
+// 11) Admin can open the Users management page and sees john listed.
+$usersPage = curl("$base/users", $cookie);
+assertHas($usersPage, 'Users', 'admin can reach /users');
+assertHas($usersPage, 'john', 'users page lists the admin');
+
+// 12) Admin creates a member (alice).
+$csrfU = '';
+if (preg_match('/name="csrf" value="([^"]+)"/', $usersPage, $m)) { $csrfU = $m[1]; }
+curl("$base/users/create", $cookie, 'POST', ['csrf' => $csrfU, 'user' => 'alice', 'pass' => 'alicepass1', 'role' => 'member']);
+$usersAfter = curl("$base/users", $cookie);
+assertHas($usersAfter, 'alice', 'users page lists newly created member alice');
+
+// 13) Member alice can log in and record a transaction.
+$jarA = tempnam(sys_get_temp_dir(), 'monster_alice_');
+$rA = curl("$base/login", $jarA, 'POST', ['user' => 'alice', 'pass' => 'alicepass1']);
+assertHas($rA, 'Dashboard', 'member alice can log in');
+
+// Pull CSRF from alice's transactions page and add a sale.
+$txnA = curl("$base/transactions", $jarA);
+preg_match('/name="csrf" value="([^"]+)"/', $txnA, $mA);
+$csrfA = $mA[1] ?? '';
+curl("$base/transactions/save", $jarA, 'POST', [
+    'csrf' => $csrfA, 'id' => '', 'type' => 'sale', 'amount' => '10.00',
+    'date' => '2026-08-15', 'category' => 'Retail', 'note' => 'alice sale',
+]);
+$repA = curl("$base/report", $jarA);
+assertHas($repA, 'alice sale', 'member alice transaction visible on report');
+
+// 14) Member alice is blocked from /users (admin-only).
+$rBlock = curl("$base/users", $jarA);
+assertHas($rBlock, 'Forbidden', 'member blocked from /users');
+@unlink($jarA);
+
 proc_terminate($proc);
 @unlink($root . '/data');
 array_map('unlink', glob($testData . '/*') ?: []);
@@ -136,4 +174,54 @@ array_map('unlink', glob($testData . '/*') ?: []);
 @unlink($cookie);
 
 echo $failed ? "\nSMOKE TEST FAILED\n" : "\nSMOKE TEST PASSED\n";
+
+// ---------------------------------------------------------------------------
+// Legacy migration sub-test: a db.json from the single-user era (settings.user /
+// settings.password_hash) must still authenticate the original owner, and that
+// owner must now be an admin. Boot a fresh server pointed at a seeded db.json.
+// ---------------------------------------------------------------------------
+$migDir = $root . '/data_mig';
+@mkdir($migDir, 0o750, true);
+$legacy = [
+    'settings' => [
+        'user' => 'legacyboss',
+        'password_hash' => password_hash('legacypw99', PASSWORD_BCRYPT, ['cost' => 13]),
+    ],
+    'transactions' => [],
+];
+file_put_contents($migDir . '/db.json', json_encode($legacy, JSON_PRETTY_PRINT));
+@unlink($root . '/data');
+symlink($migDir, $root . '/data');
+
+$port2 = 8138;
+$host2 = "127.0.0.1:$port2";
+$base2 = "http://$host2";
+$cookie2 = tempnam(sys_get_temp_dir(), 'monster_mig_');
+$proc2 = proc_open(PHP_BINARY . " -S $host2 " . escapeshellarg($root . '/web/index.php'), $descriptor, $pipes2);
+$ok2 = false;
+for ($i = 0; $i < 40; $i++) {
+    $c = @fsockopen('127.0.0.1', $port2, $errno, $errstr, 0.3);
+    if ($c) { fclose($c); $ok2 = true; break; }
+    usleep(100_000);
+}
+if (!$ok2) { fwrite(STDERR, "FAIL: migration server did not start\n"); $failed = true; }
+else {
+    echo "\nRunning legacy migration sub-test\n";
+    // Old owner logs in with their original password.
+    $r = curl("$base2/login", $cookie2, 'POST', ['user' => 'legacyboss', 'pass' => 'legacypw99']);
+    assertHas($r, 'Dashboard', 'legacy single-user can still log in');
+    // Should be admin and able to reach /users (migration promoted them).
+    $u = curl("$base2/users", $cookie2);
+    assertHas($u, 'legacyboss', 'migrated user present in /users');
+    // The legacy settings keys should have been cleared.
+    $db2 = json_decode(file_get_contents($root . '/data/db.json'), true);
+    assertHas(($db2['settings']['user'] ?? null) === null ? 'ok' : '', 'ok', 'legacy settings.user cleared after migration');
+    proc_terminate($proc2);
+}
+@unlink($root . '/data');
+array_map('unlink', glob($migDir . '/*') ?: []);
+@rmdir($migDir);
+@unlink($cookie2);
+
+echo $failed ? "\nALL TESTS FAILED\n" : "\nALL TESTS PASSED\n";
 exit($failed ? 1 : 0);

@@ -27,7 +27,7 @@ if ($uri === '/setup' && !$app->auth->isConfigured()) {
         if ($user === '' || strlen($pass) < 8) {
             return view('login', ['title' => 'Set up', 'error' => 'Username required and password must be at least 8 characters.', 'setup' => true]);
         }
-        $app->auth->setCredentials($user, $pass);
+        $app->auth->createUser($user, $pass, Auth::ROLE_ADMIN); // first user = admin
         $app->auth->login($user, $pass);
         header('Location: /dashboard');
         exit;
@@ -60,6 +60,7 @@ if (!$app->auth->check()) {
 
 // ---- Authenticated routes ----
 $user = $app->auth->user();
+$isAdmin = $app->auth->isAdmin($user);
 
 if ($uri === '/' || $uri === '/dashboard') {
     $summary = $app->txns->summary();
@@ -99,16 +100,16 @@ if ($uri === '/transactions/delete' && $method === 'POST') {
 }
 
 if ($uri === '/report') {
-    return view('report', ['title' => 'Report', 'user' => $user, 'summary' => $app->txns->summary(), 'txns' => $app->txns->all()]);
+    return view('report', ['title' => 'Report', 'user' => $user, 'isAdmin' => $isAdmin, 'summary' => $app->txns->summary(), 'txns' => $app->txns->all()]);
 }
 
 if ($uri === '/settings') {
-    return view('settings', ['title' => 'Settings', 'user' => $user, 'configured' => $app->auth->isConfigured()]);
+    return view('settings', ['title' => 'Settings', 'user' => $user, 'isAdmin' => $isAdmin, 'configured' => $app->auth->isConfigured()]);
 }
 
 if ($uri === '/settings/password' && $method === 'POST') {
     if (csrfValid($_POST['csrf'] ?? null) && strlen($_POST['pass'] ?? '') >= 8) {
-        $app->auth->setCredentials($user, $_POST['pass']);
+        $app->auth->setPassword($user, $_POST['pass']);
         setFlash('Password changed.');
     }
     header('Location: /settings'); exit;
@@ -120,6 +121,59 @@ if ($uri === '/settings/reset' && $method === 'POST') {
         setFlash('All transactions deleted.');
     }
     header('Location: /settings'); exit;
+}
+
+// ---- Admin-only: user management ----
+if (str_starts_with($uri, '/users')) {
+    if (!$isAdmin) {
+        http_response_code(403);
+        echo "<!doctype html><html><head><meta charset=\"utf-8\"><title>Forbidden</title></head>"
+            . "<body><h1>403 Forbidden</h1><p>Admin access required.</p></body></html>";
+        exit;
+    }
+    if ($uri === '/users' && $method === 'GET') {
+        return view('users', [
+            'title' => 'Users', 'user' => $user, 'isAdmin' => $isAdmin,
+            'users' => $app->auth->users(), 'me' => $user,
+        ]);
+    }
+    if ($uri === '/users/create' && $method === 'POST') {
+        if (csrfValid($_POST['csrf'] ?? null)) {
+            try {
+                $app->auth->createUser(
+                    $_POST['user'] ?? '',
+                    $_POST['pass'] ?? '',
+                    ($_POST['role'] ?? Auth::ROLE_MEMBER) === Auth::ROLE_ADMIN ? Auth::ROLE_ADMIN : Auth::ROLE_MEMBER
+                );
+                setFlash('User created.');
+            } catch (\InvalidArgumentException $e) {
+                setFlash($e->getMessage());
+            }
+        }
+        header('Location: /users'); exit;
+    }
+    if ($uri === '/users/role' && $method === 'POST') {
+        if (csrfValid($_POST['csrf'] ?? null)) {
+            try {
+                $app->auth->setRole($_POST['user'] ?? '', $_POST['role'] ?? Auth::ROLE_MEMBER);
+                setFlash('Role updated.');
+            } catch (\InvalidArgumentException $e) {
+                setFlash($e->getMessage());
+            }
+        }
+        header('Location: /users'); exit;
+    }
+    if ($uri === '/users/delete' && $method === 'POST') {
+        if (csrfValid($_POST['csrf'] ?? null) && ($_POST['user'] ?? '') !== $user) {
+            try {
+                $app->auth->deleteUser($_POST['user'] ?? '');
+                setFlash('User deleted.');
+            } catch (\InvalidArgumentException $e) {
+                setFlash($e->getMessage());
+            }
+        }
+        header('Location: /users'); exit;
+    }
 }
 
 http_response_code(404);

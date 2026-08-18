@@ -5,7 +5,9 @@ energy drinks. Hosted at **monster.kawasu.wtf** behind FrankenPHP (Caddy).
 
 ## What it does
 
-- **Login-protected** single-owner account (bcrypt-hashed password, session cookies).
+- **Login-protected, multi-user** (bcrypt-hashed passwords, session cookies).
+  The first account created during setup is an **admin**; admins can add
+  co-workers as **members**. All users share the same transaction ledger.
 - Record **sales** (money in) and **expenses** (money out) with date, category, note.
 - **Dashboard** with revenue / expenses / net profit and a per-category breakdown.
 - **Report** view of every entry.
@@ -23,9 +25,9 @@ monster/
 │   ├── Storage.php      # atomic JSON-file storage (no DB dependency)
 │   ├── Transaction.php  # domain object (sale/expense, signed amounts)
 │   ├── TransactionRepository.php
-│   ├── Auth.php         # session auth + hashed credentials
+│   ├── Auth.php         # multi-user session auth, roles, bcrypt hashes
 │   ├── helpers.php      # e()/money()/csrf*/flash helpers
-│   └── views/           # login, dashboard, transactions, report, settings, layout
+│   └── views/           # login, dashboard, transactions, report, settings, users, layout
 ├── data/db.json         # <-- created at runtime (OUTSIDE doc root, not web-served)
 ├── composer.json
 ├── smoke-test.php       # headless end-to-end test
@@ -62,11 +64,25 @@ Run on the server as root / via sudo:
 sudo ./deploy.sh
 ```
 
-On first load, visit the site and create the owner account. Done.
+On first load, visit `https://monster.kawasu.wtf/setup` and create the admin
+account. After that, admins can add co-workers via **Users** in the nav.
+
+## Users & roles
+
+- **Admin** — full access, plus user management (create / change role / remove).
+  The first account (created at `/setup`) is always an admin, and the **last
+  admin can never be demoted or deleted** (guards against locking everyone out).
+- **Member** — can view the dashboard/report and record transactions, but cannot
+  manage users.
+
+A legacy single-owner install (credentials stored under `settings`) is migrated
+into the `users` collection automatically on first run, with the original owner
+promoted to admin — no manual step required.
 
 ## Security notes
 
 - Passwords hashed with `PASSWORD_BCRYPT` (cost 13).
 - Session cookie is `HttpOnly`, `SameSite=Lax`, and `Secure` when behind HTTPS.
 - All state-changing forms carry a CSRF token verified server-side.
+- The `/users` management area is admin-only (403 for members).
 - `data/db.json` lives outside the document root, so it is never web-served.
