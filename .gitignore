@@ -1,0 +1,9 @@
+# Ignore dependencies, build artifacts, and local data.
+/vendor/
+/composer.lock
+/data/
+/data_test/
+*.tmp
+.idea/
+.vscode/
+.DS_Store

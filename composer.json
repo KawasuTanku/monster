@@ -1,0 +1,19 @@
+{
+    "name": "kawasutanku/monster",
+    "description": "Login-protected profit & loss tracker for a small energy-drink side business.",
+    "type": "project",
+    "require": {
+        "php": ">=8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Monster\\": "src/"
+        },
+        "files": [
+            "src/helpers.php"
+        ]
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
