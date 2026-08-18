@@ -11,6 +11,8 @@ use function Monster\e;
 use function Monster\csrfToken;
 use function Monster\csrfValid;
 use function Monster\setFlash;
+use function Monster\itemLabel;
+use function Monster\money;
 
 require __DIR__ . '/../vendor/autoload.php';
 
@@ -73,7 +75,7 @@ $isAdmin = $app->auth->isAdmin($user);
 if ($uri === '/' || $uri === '/dashboard') {
     $summary = $app->txns->summary();
     $recent = $app->txns->all();
-    return view('dashboard', ['title' => 'Dashboard', 'user' => $user, 'summary' => $summary, 'recent' => $recent]);
+    return view('dashboard', ['title' => 'Dashboard', 'user' => $user, 'summary' => $summary, 'recent' => $recent, 'stockValue' => $app->inv->totalStockValue()]);
 }
 
 if ($uri === '/transactions') {
@@ -81,12 +83,14 @@ if ($uri === '/transactions') {
     if (isset($_GET['edit'])) {
         $edit = $app->txns->find($_GET['edit']);
     }
-    return view('transactions', ['title' => 'Transactions', 'user' => $user, 'txns' => $app->txns->all(), 'edit' => $edit]);
+    $items = $app->inv->all();
+    return view('transactions', ['title' => 'Transactions', 'user' => $user, 'txns' => $app->txns->all(), 'edit' => $edit, 'items' => $items]);
 }
 
 if ($uri === '/transactions/save' && $method === 'POST') {
-    if (!csrfValid($_POST['csrf'] ?? null)) { http_response_code(403); return view('transactions', ['title' => 'Transactions', 'user' => $user, 'txns' => $app->txns->all(), 'edit' => null]); }
-    $t = new Transaction();
+    if (!csrfValid($_POST['csrf'] ?? null)) { http_response_code(403); return view('transactions', ['title' => 'Transactions', 'user' => $user, 'txns' => $app->txns->all(), 'edit' => null, 'items' => $app->inv->all()]); }
+    $isEdit = ($_POST['id'] ?? '') !== '';
+    $t = $isEdit ? ($app->txns->find($_POST['id']) ?? new Transaction()) : new Transaction();
     $t->id = ($_POST['id'] ?? '') ?: bin2hex(random_bytes(12));
     $t->type = in_array($_POST['type'] ?? '', [Transaction::TYPE_SALE, Transaction::TYPE_EXPENSE], true) ? $_POST['type'] : Transaction::TYPE_SALE;
     $t->amount = max(0.0, (float) ($_POST['amount'] ?? 0));
@@ -94,6 +98,22 @@ if ($uri === '/transactions/save' && $method === 'POST') {
     $t->note = trim($_POST['note'] ?? '');
     $t->date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_POST['date'] ?? '') ? $_POST['date'] : date('Y-m-d');
     $t->createdAt = time();
+
+    // Optional inventory linkage: a new sale linked to an item decrements stock.
+    $linkedItemId = trim($_POST['itemId'] ?? '');
+    $linkedQty = max(0.0, (float) ($_POST['qty'] ?? 1));
+    if (!$isEdit) {
+        $t->itemId = $linkedItemId;
+        $t->qty = $linkedQty;
+        if ($linkedItemId !== '' && $t->type === Transaction::TYPE_SALE) {
+            $item = $app->inv->find($linkedItemId);
+            if ($item !== null) {
+                $item->qtyOnHand = max(0, $item->qtyOnHand - (int) round($linkedQty));
+                $app->inv->save($item);
+            }
+        }
+    }
+
     $app->txns->save($t);
     setFlash('Saved.');
     header('Location: /transactions'); exit;
@@ -101,6 +121,15 @@ if ($uri === '/transactions/save' && $method === 'POST') {
 
 if ($uri === '/transactions/delete' && $method === 'POST') {
     if (csrfValid($_POST['csrf'] ?? null)) {
+        $t = $app->txns->find($_POST['id'] ?? '');
+        // Restore stock when deleting a sale that was linked to an inventory item.
+        if ($t !== null && $t->itemId !== '' && $t->type === Transaction::TYPE_SALE) {
+            $item = $app->inv->find($t->itemId);
+            if ($item !== null) {
+                $item->qtyOnHand += (int) round($t->qty);
+                $app->inv->save($item);
+            }
+        }
         $app->txns->delete($_POST['id'] ?? '');
         setFlash('Deleted.');
     }
@@ -123,6 +152,7 @@ if ($uri === '/report') {
         'filters' => $filters,
         'roiSeries' => $app->txns->roiSeries($filters),
         'roiOverall' => $app->txns->roiOverall($filters),
+        'items' => $app->inv->all(),
     ]);
 }
 
@@ -344,6 +374,32 @@ if ($uri === '/inventory/adjust' && $method === 'POST') {
         if ($item !== null && $delta !== 0) {
             $item->qtyOnHand = max(0, $item->qtyOnHand + $delta);
             $app->inv->save($item);
+        }
+    }
+    header('Location: /inventory'); exit;
+}
+
+if ($uri === '/inventory/restock' && $method === 'POST') {
+    if (csrfValid($_POST['csrf'] ?? null)) {
+        $item = $app->inv->find($_POST['id'] ?? '');
+        $qty = max(0, (int) ($_POST['qty'] ?? 0));
+        if ($item !== null && $qty > 0) {
+            $item->qtyOnHand += $qty;
+            $app->inv->save($item);
+            // Auto-post the cost of goods as a COGS expense linked to this item.
+            $cost = round($item->unitCost * $qty, 2);
+            $t = new Transaction();
+            $t->id = bin2hex(random_bytes(12));
+            $t->type = Transaction::TYPE_EXPENSE;
+            $t->amount = $cost;
+            $t->category = 'Wholesale';
+            $t->note = 'Restock ' . $qty . ' × ' . itemLabel($item);
+            $t->date = date('Y-m-d');
+            $t->createdAt = time();
+            $t->itemId = $item->id;
+            $t->qty = (float) $qty;
+            $app->txns->save($t);
+            setFlash('Restocked ' . $qty . ' — cost of $' . money($cost) . ' logged.');
         }
     }
     header('Location: /inventory'); exit;

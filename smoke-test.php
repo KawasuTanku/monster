@@ -242,7 +242,7 @@ if (preg_match('/href="\/backup\/download\?file=([^"]+)"/', $backupPage2, $m2)) 
     assertHas($after, 'Restored from', 'restore reports success');
 }
 
-// 12e) REGRESSION: inventory add / adjust / low-stock / delete.
+// 12e) REGRESSION: inventory add / adjust / low-stock / restock->COGS / linked sale / delete.
 $invPage = curl("$base/inventory", $cookie);
 assertHas($invPage, 'Inventory', 'admin can reach /inventory');
 $csrfInv = '';
@@ -257,12 +257,34 @@ $invAfter = curl("$base/inventory", $cookie);
 // Assert a real table row exists (match the SKU cell, not the form placeholder).
 assertHas($invAfter, '(ED-ORG)', 'inventory item listed after add');
 assertHas($invAfter, '$42.00', 'stock value = 3 x 14 = 42');
-// Drop below threshold via -1 adjust, expect low-stock flag.
+// Grab the item id for later restock + linked-sale tests.
 preg_match('/href="\/inventory\?edit=([^"]+)"/', $invAfter, $mi);
 $invId = $mi[1] ?? '';
+// Drop below threshold via -1 adjust, expect low-stock flag.
 curl("$base/inventory/adjust", $cookie, 'POST', ['csrf' => $csrfInv, 'id' => $invId, 'delta' => '-1']);
 $invLow = curl("$base/inventory", $cookie);
 assertHas($invLow, 'Low stock', 'low-stock stat increments when qty drops below reorderAt');
+
+// 12f) Restock 12 cans -> stock rises and a COGS expense (12 x $14 = $168) is logged.
+curl("$base/inventory/restock", $cookie, 'POST', ['csrf' => $csrfInv, 'id' => $invId, 'qty' => '12']);
+$invRestock = curl("$base/inventory", $cookie);
+assertHas($invRestock, '$196.00', 'stock value = 14 x 14 = 196 after restock of 12');
+$repRestock = curl("$base/report", $cookie);
+assertHas($repRestock, 'Restock 12', 'restock auto-logged a COGS expense (note mentions Restock 12)');
+assertHas($repRestock, '$168.00', 'restock COGS = 12 x 14 = 168 logged');
+
+// 12g) Linked sale of 2 cans -> revenue logged and stock decremented by 2.
+$txnPage = curl("$base/transactions", $cookie);
+preg_match('/name="csrf" value="([^"]+)"/', $txnPage, $mT);
+$csrfT = $mT[1] ?? '';
+curl("$base/transactions/save", $cookie, 'POST', [
+    'csrf' => $csrfT, 'id' => '', 'type' => 'sale', 'amount' => '48.00',
+    'date' => '2026-08-14', 'category' => 'Retail', 'note' => 'linked sale',
+    'itemId' => $invId, 'qty' => '2',
+]);
+$invSale = curl("$base/inventory", $cookie);
+assertHas($invSale, '$168.00', 'stock value = 12 x 14 = 168 after linked sale of 2');
+
 // Delete it.
 curl("$base/inventory/delete", $cookie, 'POST', ['csrf' => $csrfInv, 'id' => $invId]);
 $invDel = curl("$base/inventory", $cookie);

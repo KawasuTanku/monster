@@ -25,6 +25,10 @@ final class Transaction
     public string $note;
     public string $date; // YYYY-MM-DD
     public int $createdAt;
+    /** Linked inventory item id, or '' when this transaction is not item-linked. */
+    public string $itemId = '';
+    /** Units moved for item-linked transactions (cans). Defaults to 1.0. */
+    public float $qty = 1.0;
 
     /**
      * @param array<string, mixed> $row
@@ -39,6 +43,8 @@ final class Transaction
         $t->note = (string) ($row['note'] ?? '');
         $t->date = (string) ($row['date'] ?? date('Y-m-d'));
         $t->createdAt = (int) ($row['createdAt'] ?? time());
+        $t->itemId = (string) ($row['itemId'] ?? '');
+        $t->qty = (float) ($row['qty'] ?? 1);
         return $t;
     }
 
@@ -53,6 +59,8 @@ final class Transaction
             'note' => $this->note,
             'date' => $this->date,
             'createdAt' => $this->createdAt,
+            'itemId' => $this->itemId,
+            'qty' => round($this->qty, 4),
         ];
     }
 

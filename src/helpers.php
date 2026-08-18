@@ -68,6 +68,23 @@ function setFlash(string $msg): void
 }
 
 /**
+ * Human-readable label for an inventory item, e.g. "Original 12-pack (ED-ORG)".
+ * @param \Monster\InventoryItem|null $item
+ */
+function itemLabel(?\Monster\InventoryItem $item, string $fallback = ''): string
+{
+    if ($item === null) {
+        return $fallback;
+    }
+    $name = trim($item->name . ' ' . $item->variant);
+    $label = trim($name) !== '' ? trim($name) : $item->sku;
+    if ($item->sku !== '') {
+        $label .= ' (' . $item->sku . ')';
+    }
+    return $label;
+}
+
+/**
  * Build a dependency-free inline SVG line chart of cumulative net profit per
  * period. No external JS/CDN — renders entirely in markup so it works offline
  * on FrankenPHP and survives backup/restore unchanged.

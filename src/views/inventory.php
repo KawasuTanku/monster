@@ -82,6 +82,12 @@ use function Monster\csrfToken;
                         <input type="hidden" name="delta" value="1">
                         <button type="submit" class="link" title="Restock one">+1</button>
                     </form>
+                    <form method="post" action="/inventory/restock" class="inline restock">
+                        <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
+                        <input type="hidden" name="id" value="<?= e($i->id) ?>">
+                        <input type="number" min="1" step="1" name="qty" value="12" class="qty" title="Restock quantity">
+                        <button type="submit" class="link" title="Restock & log cost">restock</button>
+                    </form>
                     <form method="post" action="/inventory/delete" class="inline">
                         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
                         <input type="hidden" name="id" value="<?= e($i->id) ?>">

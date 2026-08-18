@@ -2,6 +2,7 @@
 declare(strict_types=1);
 /** @var array{revenue: float, expenses: float, net: float, by_category: array<string,float>} $summary */
 /** @var list<\Monster\Transaction> $recent */
+/** @var float $stockValue */
 use function Monster\e;
 use function Monster\money;
 use function Monster\moneyClass;
@@ -19,6 +20,10 @@ use function Monster\moneyClass;
     <div class="stat highlight">
         <div class="label">Net Profit</div>
         <div class="value <?= moneyClass($summary['net']) ?>">$<?= money($summary['net']) ?></div>
+    </div>
+    <div class="stat">
+        <div class="label">Stock value</div>
+        <div class="value">$<?= money($stockValue) ?></div>
     </div>
 </section>
 

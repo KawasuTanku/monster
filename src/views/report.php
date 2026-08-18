@@ -3,12 +3,14 @@ declare(strict_types=1);
 /** @var array{revenue: float, expenses: float, net: float, by_category: array<string,float>} $summary */
 /** @var list<\Monster\Transaction> $txns */
 /** @var list<string> $categories */
+/** @var list<\Monster\InventoryItem> $items */
 /** @var array{type?: string, category?: string, from?: string, to?: string} $filters */
 /** @var list<array{period: string, label: string, revenue: float, cost: float, net: float, roiPct: float, cumNet: float}> $roiSeries */
 /** @var array{revenue: float, cost: float, net: float, roiPct: float} $roiOverall */
 use function Monster\e;
 use function Monster\money;
 use function Monster\moneyClass;
+use function Monster\itemLabel;
 use function Monster\roiChartSvg;
 ?>
 <h1>Report</h1>
@@ -78,6 +80,7 @@ use function Monster\roiChartSvg;
 <?php endif; ?>
 
 <?php if (!empty($txns)): ?>
+    <?php $itemMap = []; foreach ($items as $it) { $itemMap[$it->id] = $it; } ?>
     <h2>All entries</h2>
     <table class="table">
         <thead><tr><th>Date</th><th>Type</th><th>Category</th><th class="num">Amount</th><th>Note</th></tr></thead>
@@ -88,7 +91,7 @@ use function Monster\roiChartSvg;
                 <td><?= e($t->type) ?></td>
                 <td><?= e($t->category) ?></td>
                 <td class="num <?= moneyClass($t->signed()) ?>">$<?= money($t->amount) ?></td>
-                <td class="muted"><?= e($t->note) ?></td>
+                <td class="muted"><?= e($t->note) ?><?= $t->itemId !== '' ? ' · ' . e(itemLabel($itemMap[$t->itemId] ?? null)) : '' ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>
