@@ -51,7 +51,7 @@ else
 fi
 
 echo "==> Installing composer dependencies"
-run_as "cd '$DEST' && php ${COMPOSER:-composer} install --no-dev --no-interaction --optimize-autoloader"
+run_as "cd '$DEST' && ${COMPOSER:-composer} install --no-dev --no-interaction --optimize-autoloader"
 
 echo "==> Preparing data directory"
 run_as "mkdir -p '$DEST/data' && chmod 750 '$DEST/data'"
