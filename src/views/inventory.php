@@ -44,7 +44,9 @@ use function Monster\csrfToken;
         <label>Reorder at
             <input type="number" min="0" step="1" name="reorderAt" value="<?= $edit ? e((string) $edit->reorderAt) : '0' ?>" placeholder="low-stock threshold">
         </label>
-        <label>Supplier
+    </div>
+    <div class="row">
+        <label class="wide">Supplier
             <input type="text" name="supplier" value="<?= $edit ? e($edit->supplier) : '' ?>" placeholder="optional">
         </label>
     </div>
@@ -57,6 +59,7 @@ use function Monster\csrfToken;
 <?php if (empty($items)): ?>
     <p class="muted">No inventory tracked yet.</p>
 <?php else: ?>
+    <div class="table-wrap">
     <table class="table">
         <thead><tr><th>Name</th><th>Variant</th><th class="num">Qty</th><th class="num">Cost</th><th class="num">Price</th><th class="num">Stock $</th><th></th></tr></thead>
         <tbody>
@@ -98,4 +101,5 @@ use function Monster\csrfToken;
         <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
 <?php endif; ?>
