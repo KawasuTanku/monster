@@ -26,7 +26,7 @@ use function Monster\money;
         <tr>
             <td><?= e($b['name']) ?></td>
             <td class="muted"><?= e(date('Y-m-d H:i', $b['mtime'])) ?></td>
-            <td class="muted"><?= e(round($b['size'] / 1024, 1)) ?> KB</td>
+            <td class="muted"><?= e((string) round($b['size'] / 1024, 1)) ?> KB</td>
             <td class="row-actions">
                 <a class="link" href="/backup/download?file=<?= e(rawurlencode($b['name'])) ?>">download</a>
                 <form method="post" action="/backup/restore" class="inline">

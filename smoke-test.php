@@ -237,8 +237,10 @@ assertHas($dl, 'transactions', 'backup download returns store JSON');
 // Restore is exercised by posting the first listed backup file name.
 if (preg_match('/href="\/backup\/download\?file=([^"]+)"/', $backupPage2, $m2)) {
     $fname = rawurldecode($m2[1]);
-    curl("$base/backup/restore", $cookie, 'POST', ['csrf' => $csrfBk, 'file' => $fname]);
-    $after = curl("$base/backup", $cookie);
+    // The restore route 302-redirects to /backup and flashes "Restored from …".
+    // Capture the followed (final) response, which is where the flash renders —
+    // a separate GET after this would find the flash already consumed.
+    $after = curl("$base/backup/restore", $cookie, 'POST', ['csrf' => $csrfBk, 'file' => $fname]);
     assertHas($after, 'Restored from', 'restore reports success');
 }
 
