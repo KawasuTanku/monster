@@ -84,6 +84,15 @@ function itemLabel(?\Monster\InventoryItem $item, string $fallback = ''): string
     return $label;
 }
 
+/** Inline trash-can icon (uses currentColor) for delete affordances. @return string */
+function trashIcon(): string
+{
+    return '<svg viewBox="0 0 24 24" width="16" height="16" class="icon-trash" aria-hidden="true" focusable="false">'
+        . '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" '
+        . 'd="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7'
+        . 'M10 11v6M14 11v6"/></svg>';
+}
+
 /**
  * Build a dependency-free inline SVG line chart of cumulative net profit per
  * period. No external JS/CDN — renders entirely in markup so it works offline

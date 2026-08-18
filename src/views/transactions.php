@@ -8,6 +8,7 @@ use function Monster\money;
 use function Monster\moneyClass;
 use function Monster\csrfToken;
 use function Monster\itemLabel;
+use function Monster\trashIcon;
 ?>
 <h1>Transactions</h1>
 
@@ -111,7 +112,7 @@ use function Monster\itemLabel;
                     <form method="post" action="/transactions/delete" class="inline">
                         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
                         <input type="hidden" name="id" value="<?= e($t->id) ?>">
-                        <button type="submit" class="link danger">del</button>
+                        <button type="submit" class="link danger icon-btn" title="Delete" aria-label="Delete"><?= trashIcon() ?></button>
                     </form>
                 </td>
             </tr>

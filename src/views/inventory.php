@@ -3,6 +3,8 @@ declare(strict_types=1);
 /** @var list<\Monster\InventoryItem> $items */
 /** @var \Monster\InventoryItem|null $edit */
 use function Monster\e;
+use function Monster\itemLabel;
+use function Monster\trashIcon;
 use function Monster\money;
 use function Monster\csrfToken;
 ?>
@@ -94,7 +96,7 @@ use function Monster\csrfToken;
                     <form method="post" action="/inventory/delete" class="inline">
                         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
                         <input type="hidden" name="id" value="<?= e($i->id) ?>">
-                        <button type="submit" class="link danger">del</button>
+                        <button type="submit" class="link danger icon-btn" title="Delete" aria-label="Delete"><?= trashIcon() ?></button>
                     </form>
                 </td>
             </tr>
