@@ -21,13 +21,13 @@
 #
 # Env overrides (handy for testing):
 #   MONSTER_DEST   default /opt/caddy/monster.kawasu.wtf
-#   MONSTER_REMOTE default git@github.com:KawasuTanku/monster.git
+#   MONSTER_REMOTE default https://github.com/KawasuTanku/monster.git
 #   MONSTER_BRANCH default main
 #   COMPOSER       default composer
 #
 set -euo pipefail
 
-REMOTE="${MONSTER_REMOTE:-git@github.com:KawasuTanku/monster.git}"
+REMOTE="${MONSTER_REMOTE:-https://github.com/KawasuTanku/monster.git}"
 DEST="${MONSTER_DEST:-/opt/caddy/monster.kawasu.wtf}"
 OWNER="frankenphp:frankenphp"
 BRANCH="${MONSTER_BRANCH:-main}"
