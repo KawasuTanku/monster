@@ -137,6 +137,20 @@ $csvExp = curl("$base/report/export?type=expense", $cookie);
 assertHas($csvExp, 'cases', 'filtered export keeps expense');
 assertMissing($csvExp, 'farmer market', 'filtered export drops sale');
 
+// 6c) PHASE B: ROI chart + metrics appear on the report page.
+// Known data: sale 250.00 (08-10) - expense 90.50 (08-12) = net 159.50, ROI = 159.50/90.50 = 176.24%.
+$repRoi = curl("$base/report", $cookie);
+assertHas($repRoi, 'Cumulative Net Profit', 'report shows ROI chart section');
+assertHas($repRoi, 'class="roi-chart"', 'report renders inline SVG roi-chart');
+assertHas($repRoi, 'Monthly breakdown', 'report shows monthly ROI breakdown');
+assertHas($repRoi, '176.24%', 'overall ROI computed = 159.50 / 90.50 = 176.24%');
+assertHas($repRoi, '$159.50', 'monthly cum net ends at 159.50');
+assertHas($repRoi, 'Aug 2026', 'monthly breakdown labels period (Aug 2026)');
+
+// 6d) PHASE B: ROI respects the report filters (type=expense => revenue 0, ROI -100%).
+$repRoiExp = curl("$base/report?type=expense", $cookie);
+assertHas($repRoiExp, '-100.00%', 'expense-only filter yields -100.00% ROI (no revenue, full cost lost)');
+
 // 7) Persistence: re-read file directly to confirm it is on disk.
 $db = json_decode(file_get_contents($root . '/data/db.json'), true);
 assertHas(count($db['transactions'] ?? []) === 2 ? 'ok' : '', 'ok', 'two transactions persisted to db.json');

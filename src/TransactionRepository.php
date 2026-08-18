@@ -110,4 +110,78 @@ final class TransactionRepository
             'by_category' => array_map(static fn(float $v): float => round($v, 2), $byCategory),
         ];
     }
+
+    /**
+     * Monthly ROI / P&L series computed from (filtered) transactions.
+     * Each bucket carries that period's revenue, cost, net, ROI %, and the
+     * running cumulative net so a line chart can show profit building up.
+     *
+     * @param array{type?: string, category?: string, from?: string, to?: string} $filters
+     * @return list<array{period: string, label: string, revenue: float, cost: float, net: float, roiPct: float, cumNet: float}>
+     */
+    public function roiSeries(array $filters = []): array
+    {
+        $buckets = [];
+        foreach ($this->filtered($filters) as $t) {
+            $period = substr($t->date, 0, 7); // YYYY-MM
+            if (!isset($buckets[$period])) {
+                $buckets[$period] = ['revenue' => 0.0, 'cost' => 0.0];
+            }
+            if ($t->type === Transaction::TYPE_EXPENSE) {
+                $buckets[$period]['cost'] += $t->amount;
+            } else {
+                $buckets[$period]['revenue'] += $t->amount;
+            }
+        }
+        ksort($buckets);
+
+        $out = [];
+        $cum = 0.0;
+        foreach ($buckets as $period => $b) {
+            $revenue = round($b['revenue'], 2);
+            $cost = round($b['cost'], 2);
+            $net = round($revenue - $cost, 2);
+            $cum = round($cum + $net, 2);
+            $roiPct = $cost > 0 ? round($net / $cost * 100, 2) : ($revenue > 0 ? 100.0 : 0.0);
+            $ts = strtotime($period . '-01');
+            $label = $ts !== false ? date('M Y', $ts) : $period;
+            $out[] = [
+                'period' => $period,
+                'label' => $label,
+                'revenue' => $revenue,
+                'cost' => $cost,
+                'net' => $net,
+                'roiPct' => $roiPct,
+                'cumNet' => $cum,
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Aggregate ROI across all (filtered) transactions.
+     *
+     * @param array{type?: string, category?: string, from?: string, to?: string} $filters
+     * @return array{revenue: float, cost: float, net: float, roiPct: float}
+     */
+    public function roiOverall(array $filters = []): array
+    {
+        $rev = 0.0;
+        $cost = 0.0;
+        foreach ($this->filtered($filters) as $t) {
+            if ($t->type === Transaction::TYPE_EXPENSE) {
+                $cost += $t->amount;
+            } else {
+                $rev += $t->amount;
+            }
+        }
+        $net = round($rev - $cost, 2);
+        $roiPct = $cost > 0 ? round($net / $cost * 100, 2) : ($rev > 0 ? 100.0 : 0.0);
+        return [
+            'revenue' => round($rev, 2),
+            'cost' => round($cost, 2),
+            'net' => $net,
+            'roiPct' => $roiPct,
+        ];
+    }
 }

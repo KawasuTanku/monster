@@ -121,6 +121,8 @@ if ($uri === '/report') {
         'txns' => $txns,
         'categories' => $app->txns->categories(),
         'filters' => $filters,
+        'roiSeries' => $app->txns->roiSeries($filters),
+        'roiOverall' => $app->txns->roiOverall($filters),
     ]);
 }
 

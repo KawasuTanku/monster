@@ -95,3 +95,13 @@ button.danger { background: var(--neg); color: #2a0606; }
 .actions { display: flex; gap: 0.6rem; align-items: center; }
 .auth { max-width: 360px; }
 code { background: var(--surface-2); padding: 0.1rem 0.35rem; border-radius: 4px; }
+
+/* ---- ROI SVG chart ---- */
+.roi-chart { width: 100%; height: auto; display: block; }
+.roi-chart .grid { stroke: var(--border); stroke-width: 1; }
+.roi-chart .axis { stroke: var(--muted); stroke-width: 1; }
+.roi-chart .ylabel { fill: var(--muted); font-size: 11px; }
+.roi-chart .xlabel { fill: var(--muted); font-size: 11px; text-anchor: middle; }
+.roi-chart .roi-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.roi-chart .dot.pos { fill: var(--pos); }
+.roi-chart .dot.neg { fill: var(--neg); }
