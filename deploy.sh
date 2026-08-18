@@ -68,4 +68,4 @@ run_as "mkdir -p '$DEST/data' && chmod 750 '$DEST/data'"
 echo "==> Fixing ownership"
 chown -R "$OWNER" "$DEST"
 
-echo "==> Done. Visit https://monster.kawasu.wtf and complete first-run setup."
+echo "==> Done. Visit https://monster.kawasu.wtf/setup and complete first-run setup."
