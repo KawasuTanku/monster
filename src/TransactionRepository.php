@@ -43,6 +43,49 @@ final class TransactionRepository
     }
 
     /**
+     * All transactions, optionally filtered.
+     * @param array{type?: string, category?: string, from?: string, to?: string} $filters
+     * @return list<Transaction>
+     */
+    public function filtered(array $filters = []): array
+    {
+        $type = $filters['type'] ?? 'all';
+        $category = trim($filters['category'] ?? '');
+        $from = trim($filters['from'] ?? '');
+        $to = trim($filters['to'] ?? '');
+
+        return array_values(array_filter($this->all(), static function (Transaction $t) use ($type, $category, $from, $to): bool {
+            if ($type !== 'all' && $t->type !== $type) {
+                return false;
+            }
+            if ($category !== '' && $t->category !== $category) {
+                return false;
+            }
+            if ($from !== '' && $t->date < $from) {
+                return false;
+            }
+            if ($to !== '' && $t->date > $to) {
+                return false;
+            }
+            return true;
+        }));
+    }
+
+    /** Distinct, sorted category names across all transactions. @return list<string> */
+    public function categories(): array
+    {
+        $out = [];
+        foreach ($this->all() as $t) {
+            if ($t->category !== '') {
+                $out[$t->category] = true;
+            }
+        }
+        $out = array_keys($out);
+        sort($out);
+        return $out;
+    }
+
+    /**
      * Aggregate totals. Returns revenue, expenses, net, and per-category breakdowns.
      * @return array{revenue: float, expenses: float, net: float, by_category: array<string, float>}
      */

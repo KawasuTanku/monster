@@ -106,7 +106,52 @@ if ($uri === '/transactions/delete' && $method === 'POST') {
 }
 
 if ($uri === '/report') {
-    return view('report', ['title' => 'Report', 'user' => $user, 'isAdmin' => $isAdmin, 'summary' => $app->txns->summary(), 'txns' => $app->txns->all()]);
+    $filters = [
+        'type' => $_GET['type'] ?? 'all',
+        'category' => $_GET['category'] ?? '',
+        'from' => $_GET['from'] ?? '',
+        'to' => $_GET['to'] ?? '',
+    ];
+    $txns = $app->txns->filtered($filters);
+    return view('report', [
+        'title' => 'Report', 'user' => $user, 'isAdmin' => $isAdmin,
+        'summary' => $app->txns->summary(),
+        'txns' => $txns,
+        'categories' => $app->txns->categories(),
+        'filters' => $filters,
+    ]);
+}
+
+if ($uri === '/report/export' && $method === 'GET') {
+    $filters = [
+        'type' => $_GET['type'] ?? 'all',
+        'category' => $_GET['category'] ?? '',
+        'from' => $_GET['from'] ?? '',
+        'to' => $_GET['to'] ?? '',
+    ];
+    $txns = $app->txns->filtered($filters);
+    // Stream a CSV of the currently filtered set.
+    $filename = 'monster-transactions-' . date('Ymd') . '.csv';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    $out = fopen('php://output', 'w');
+    if ($out !== false) {
+        // UTF-8 BOM so Excel reads special characters correctly.
+        fwrite($out, "\xEF\xBB\xBF");
+        fputcsv($out, ['Date', 'Type', 'Category', 'Amount', 'Signed', 'Note']);
+        foreach ($txns as $t) {
+            fputcsv($out, [
+                $t->date,
+                $t->type,
+                $t->category,
+                number_format($t->amount, 2, '.', ''),
+                number_format($t->signed(), 2, '.', ''),
+                $t->note,
+            ]);
+        }
+        fclose($out);
+    }
+    exit;
 }
 
 if ($uri === '/settings') {

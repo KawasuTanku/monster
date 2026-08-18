@@ -119,6 +119,24 @@ assertHas($rep, 'farmer market', 'report lists sale note');
 assertHas($rep, 'cases', 'report lists expense note');
 assertHas($rep, '2', 'report transaction count');
 
+// 6a) REGRESSION: report filtering by type + date range works.
+$repExp = curl("$base/report?type=expense", $cookie);
+assertHas($repExp, 'cases', 'expense filter keeps expense');
+assertMissing($repExp, 'farmer market', 'expense filter drops sale');
+$repRange = curl("$base/report?from=2026-08-11&to=2026-08-13", $cookie);
+assertHas($repRange, 'cases', 'date range keeps 08-12 expense');
+assertMissing($repRange, 'farmer market', 'date range drops 08-10 sale');
+
+// 6b) REGRESSION: CSV export returns a parseable CSV with the right rows.
+$csvAll = curl("$base/report/export", $cookie);
+assertHas($csvAll, 'Date,Type,Category,Amount,Signed,Note', 'export has CSV header');
+assertHas($csvAll, 'farmer market', 'export includes sale row');
+assertHas($csvAll, 'cases', 'export includes expense row');
+// Filtered export returns only the matching rows.
+$csvExp = curl("$base/report/export?type=expense", $cookie);
+assertHas($csvExp, 'cases', 'filtered export keeps expense');
+assertMissing($csvExp, 'farmer market', 'filtered export drops sale');
+
 // 7) Persistence: re-read file directly to confirm it is on disk.
 $db = json_decode(file_get_contents($root . '/data/db.json'), true);
 assertHas(count($db['transactions'] ?? []) === 2 ? 'ok' : '', 'ok', 'two transactions persisted to db.json');
