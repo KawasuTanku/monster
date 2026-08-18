@@ -5,12 +5,14 @@ energy drinks. Hosted at **monster.kawasu.wtf** behind FrankenPHP (Caddy).
 
 ## What it does
 
-- **Login-protected, multi-user** (bcrypt-hashed passwords, session cookies).
+- **Login-protected, multi-user** (hashed passwords, session cookies).
   The first account created during setup is an **admin**; admins can add
   co-workers as **members**. All users share the same transaction ledger.
 - Record **sales** (money in) and **expenses** (money out) with date, category, note.
 - **Dashboard** with revenue / expenses / net profit and a per-category breakdown.
-- **Report** view of every entry.
+- **Report** view of every entry, with filtering and CSV export.
+- **Inventory** tracking per can: stock levels, unit cost/price, reorder
+  thresholds (low-stock flagged), and total capital tied up in stock.
 - Edit / delete entries, change password, reset all data.
 
 ## Architecture
@@ -25,7 +27,7 @@ monster/
 │   ├── Storage.php      # atomic JSON-file storage (no DB dependency)
 │   ├── Transaction.php  # domain object (sale/expense, signed amounts)
 │   ├── TransactionRepository.php
-│   ├── Auth.php         # multi-user session auth, roles, bcrypt hashes
+│   ├── Auth.php         # multi-user session auth, roles, hashed passwords
 │   ├── helpers.php      # e()/money()/csrf*/flash helpers
 │   └── views/           # login, dashboard, transactions, report, settings, users, layout
 ├── data/db.json         # <-- created at runtime (OUTSIDE doc root, not web-served)
@@ -81,7 +83,7 @@ promoted to admin — no manual step required.
 
 ## Security notes
 
-- Passwords hashed with `PASSWORD_BCRYPT` (cost 13).
+- Passwords are stored fully hashed (never plaintext); verification uses a constant-time check.
 - Session cookie is `HttpOnly`, `SameSite=Lax`, and `Secure` when behind HTTPS.
 - All state-changing forms carry a CSRF token verified server-side.
 - The `/users` management area is admin-only (403 for members).

@@ -5,6 +5,8 @@ use Monster\App;
 use Monster\Auth;
 use Monster\Transaction;
 use Monster\TransactionRepository;
+use Monster\InventoryItem;
+use Monster\InventoryRepository;
 use function Monster\e;
 use function Monster\csrfToken;
 use function Monster\csrfValid;
@@ -292,6 +294,64 @@ if (str_starts_with($uri, '/backup')) {
         }
         header('Location: /backup'); exit;
     }
+}
+
+// ---- Inventory (all authenticated users) ----
+if ($uri === '/inventory') {
+    $edit = null;
+    if (isset($_GET['edit'])) {
+        $edit = $app->inv->find($_GET['edit']);
+    }
+    return view('inventory', [
+        'title' => 'Inventory', 'user' => $user, 'isAdmin' => $isAdmin,
+        'items' => $app->inv->all(),
+        'edit' => $edit,
+        'totalValue' => $app->inv->totalStockValue(),
+        'lowCount' => count($app->inv->lowStock()),
+    ]);
+}
+
+if ($uri === '/inventory/save' && $method === 'POST') {
+    if (csrfValid($_POST['csrf'] ?? null)) {
+        $id = trim($_POST['id'] ?? '');
+        $item = $id !== '' ? ($app->inv->find($id) ?? new InventoryItem()) : new InventoryItem();
+        if ($id === '') {
+            $item->id = 'inv_' . bin2hex(random_bytes(8));
+            $item->createdAt = time();
+        }
+        $item->sku = trim($_POST['sku'] ?? '');
+        $item->name = trim($_POST['name'] ?? '');
+        $item->variant = trim($_POST['variant'] ?? '');
+        $item->qtyOnHand = (int) ($_POST['qtyOnHand'] ?? 0);
+        $item->unitCost = (float) ($_POST['unitCost'] ?? 0);
+        $item->unitPrice = (float) ($_POST['unitPrice'] ?? 0);
+        $item->reorderAt = (int) ($_POST['reorderAt'] ?? 0);
+        $item->supplier = trim($_POST['supplier'] ?? '');
+        if ($item->name !== '') {
+            $app->inv->save($item);
+            setFlash('Saved.');
+        }
+    }
+    header('Location: /inventory'); exit;
+}
+
+if ($uri === '/inventory/adjust' && $method === 'POST') {
+    if (csrfValid($_POST['csrf'] ?? null)) {
+        $item = $app->inv->find($_POST['id'] ?? '');
+        $delta = (int) ($_POST['delta'] ?? 0);
+        if ($item !== null && $delta !== 0) {
+            $item->qtyOnHand = max(0, $item->qtyOnHand + $delta);
+            $app->inv->save($item);
+        }
+    }
+    header('Location: /inventory'); exit;
+}
+
+if ($uri === '/inventory/delete' && $method === 'POST') {
+    if (csrfValid($_POST['csrf'] ?? null)) {
+        $app->inv->delete($_POST['id'] ?? '');
+    }
+    header('Location: /inventory'); exit;
 }
 
 http_response_code(404);

@@ -14,6 +14,7 @@ final class App
     public Storage $storage;
     public Auth $auth;
     public TransactionRepository $txns;
+    public InventoryRepository $inv;
     public Backup $backup;
 
     public function __construct(string $baseDir)
@@ -25,6 +26,7 @@ final class App
         $this->storage = new Storage($dataDir . '/db.json');
         $this->auth = new Auth($this->storage);
         $this->txns = new TransactionRepository($this->storage);
+        $this->inv = new InventoryRepository($this->storage);
         $this->backup = new Backup($this->storage);
         // Lazily keep a daily snapshot so no cron job is required.
         $this->backup->maybeDailySnapshot();

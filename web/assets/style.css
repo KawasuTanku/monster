@@ -45,6 +45,8 @@ body {
 .stat.highlight { border-color: var(--accent); }
 .stat .label { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .stat .value { font-size: 1.8rem; font-weight: 700; margin-top: 0.3rem; }
+.stat.danger { border-color: var(--neg); }
+.stat.danger .value { color: var(--neg); }
 .value.pos, .num.pos { color: var(--pos); }
 .value.neg, .num.neg { color: var(--neg); }
 .value.zero, .num.zero { color: var(--zero); }
@@ -52,7 +54,7 @@ body {
 .table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; background: var(--surface); border-radius: 8px; overflow: hidden; }
 .table th, .table td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); }
 .table th { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
-.table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.table tr.low td { background: #2a1515; }
 .row-actions { white-space: nowrap; }
 .row-actions a { color: var(--accent); text-decoration: none; margin-right: 0.5rem; }
 .link { background: none; border: none; color: var(--neg); cursor: pointer; padding: 0; font-size: 1rem; }

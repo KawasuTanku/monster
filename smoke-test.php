@@ -228,6 +228,32 @@ if (preg_match('/href="\/backup\/download\?file=([^"]+)"/', $backupPage2, $m2)) 
     assertHas($after, 'Restored from', 'restore reports success');
 }
 
+// 12e) REGRESSION: inventory add / adjust / low-stock / delete.
+$invPage = curl("$base/inventory", $cookie);
+assertHas($invPage, 'Inventory', 'admin can reach /inventory');
+$csrfInv = '';
+if (preg_match('/name="csrf" value="([^"]+)"/', $invPage, $m)) { $csrfInv = $m[1]; }
+// Add an item with a low reorder threshold.
+$saveResp = curl("$base/inventory/save", $cookie, 'POST', [
+    'csrf' => $csrfInv, 'id' => '', 'name' => 'Original', 'variant' => '12-pack',
+    'sku' => 'ED-ORG', 'qtyOnHand' => '3', 'unitCost' => '14.00', 'unitPrice' => '24.00',
+    'reorderAt' => '5', 'supplier' => 'Acme',
+]);
+$invAfter = curl("$base/inventory", $cookie);
+// Assert a real table row exists (match the SKU cell, not the form placeholder).
+assertHas($invAfter, '(ED-ORG)', 'inventory item listed after add');
+assertHas($invAfter, '$42.00', 'stock value = 3 x 14 = 42');
+// Drop below threshold via -1 adjust, expect low-stock flag.
+preg_match('/href="\/inventory\?edit=([^"]+)"/', $invAfter, $mi);
+$invId = $mi[1] ?? '';
+curl("$base/inventory/adjust", $cookie, 'POST', ['csrf' => $csrfInv, 'id' => $invId, 'delta' => '-1']);
+$invLow = curl("$base/inventory", $cookie);
+assertHas($invLow, 'Low stock', 'low-stock stat increments when qty drops below reorderAt');
+// Delete it.
+curl("$base/inventory/delete", $cookie, 'POST', ['csrf' => $csrfInv, 'id' => $invId]);
+$invDel = curl("$base/inventory", $cookie);
+assertMissing($invDel, '(ED-ORG)', 'inventory item removed after delete');
+
 // 13) Member alice can log in and record a transaction.
 $jarA = tempnam(sys_get_temp_dir(), 'monster_alice_');
 $rA = curl("$base/login", $jarA, 'POST', ['user' => 'alice', 'pass' => 'alicepass1']);

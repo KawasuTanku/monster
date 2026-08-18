@@ -22,6 +22,7 @@ use function Monster\e;
             <a href="/dashboard">Dashboard</a>
             <a href="/transactions">Transactions</a>
             <a href="/report">Report</a>
+            <a href="/inventory">Inventory</a>
             <?php if (!empty($isAdmin)): ?><a href="/users">Users</a><?php endif; ?>
             <?php if (!empty($isAdmin)): ?><a href="/backup">Backups</a><?php endif; ?>
             <a href="/settings">Settings</a>

@@ -3,7 +3,9 @@
 /composer.lock
 /data/
 /data_test/
+/data_mig/
 *.tmp
+.hermes/
 .idea/
 .vscode/
 .DS_Store
