@@ -9,6 +9,8 @@ use function Monster\money;
 <h1>Backups</h1>
 <p class="muted">Full snapshots of <code><?= e($storagePath) ?></code>. A daily snapshot is taken automatically (kept 14 days). Backups are stored outside the web root and are not served directly.</p>
 
+<p><a class="link" href="/dashboard">← Back to dashboard</a></p>
+
 <form method="post" action="/backup/create" class="inline">
     <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
     <button type="submit">Download current backup</button>

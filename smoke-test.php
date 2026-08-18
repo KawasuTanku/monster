@@ -192,6 +192,7 @@ assertMissing($editPage, 'Sign in', 'edit page is not a login redirect');
 // 12d) REGRESSION: admin can back up, download, and restore.
 $backupPage = curl("$base/backup", $cookie);
 assertHas($backupPage, 'Backups', 'admin can reach /backup');
+assertHas($backupPage, 'href="/dashboard"', 'backups page links back to dashboard');
 $csrfBk = '';
 if (preg_match('/name="csrf" value="([^"]+)"/', $backupPage, $m)) { $csrfBk = $m[1]; }
 // Create a manual backup.
