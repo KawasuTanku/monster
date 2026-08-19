@@ -202,6 +202,14 @@ if ($uri === '/report') {
         'to' => $_GET['to'] ?? '',
     ];
     $txns = $app->txns->filtered($filters);
+    $budgets = $app->storage->getSetting('budgets', []);
+    // Actual expenses per category over the current filter window.
+    $actualByCategory = [];
+    foreach ($txns as $t) {
+        if ($t->type === Transaction::TYPE_EXPENSE && $t->category !== '') {
+            $actualByCategory[$t->category] = ($actualByCategory[$t->category] ?? 0.0) + $t->amount;
+        }
+    }
     return view('report', [
         'title' => 'Report', 'user' => $user, 'isAdmin' => $isAdmin,
         'summary' => $app->txns->summary(),
@@ -211,6 +219,8 @@ if ($uri === '/report') {
         'roiSeries' => $app->txns->roiSeries($filters),
         'roiOverall' => $app->txns->roiOverall($filters),
         'items' => $app->inv->all(),
+        'budgets' => $budgets,
+        'actualByCategory' => $actualByCategory,
     ]);
 }
 
@@ -248,7 +258,12 @@ if ($uri === '/report/export' && $method === 'GET') {
 }
 
 if ($uri === '/settings') {
-    return view('settings', ['title' => 'Settings', 'user' => $user, 'isAdmin' => $isAdmin, 'configured' => $app->auth->isConfigured()]);
+    return view('settings', [
+        'title' => 'Settings', 'user' => $user, 'isAdmin' => $isAdmin,
+        'configured' => $app->auth->isConfigured(),
+        'budgets' => $app->storage->getSetting('budgets', []),
+        'categories' => $app->txns->categories(),
+    ]);
 }
 
 if ($uri === '/settings/password' && $method === 'POST') {
@@ -263,6 +278,26 @@ if ($uri === '/settings/reset' && $method === 'POST') {
     if (csrfValid($_POST['csrf'] ?? null)) {
         foreach ($app->txns->all() as $t) { $app->txns->delete($t->id); }
         setFlash('All transactions deleted.');
+    }
+    header('Location: /settings'); exit;
+}
+
+if ($uri === '/settings/budgets' && $method === 'POST') {
+    if (!$isAdmin) { http_response_code(403); header('Location: /settings'); exit; }
+    if (csrfValid($_POST['csrf'] ?? null)) {
+        // Build a map of category => monthly budget from the submitted rows.
+        $map = [];
+        $cats = $_POST['cat'] ?? [];
+        $amts = $_POST['amt'] ?? [];
+        foreach ($cats as $i => $c) {
+            $c = trim($c);
+            $a = (float) ($amts[$i] ?? 0);
+            if ($c !== '' && $a > 0) {
+                $map[$c] = round($a, 2);
+            }
+        }
+        $app->storage->setSetting('budgets', $map);
+        setFlash('Budgets saved.');
     }
     header('Location: /settings'); exit;
 }

@@ -250,6 +250,23 @@ $root2 = $root;
 $newTotal = (int) (new \PDO('sqlite:' . $root2 . '/data/db.sqlite'))->query('SELECT COUNT(*) FROM transactions')->fetchColumn();
 assertHas($newTotal >= 3 ? 'ok' : '', 'ok', 'duplicate persisted to store (count=' . $newTotal . ')');
 
+// 12c-3) REGRESSION: admin can set monthly budgets and the report shows budget vs actual.
+$settingsPage = curl("$base/settings", $cookie);
+assertHas($settingsPage, 'Monthly budgets', 'admin sees budgets editor');
+preg_match('/name="csrf" value="([^"]+)"/', $settingsPage, $mBud);
+$csrfBud = $mBud[1] ?? '';
+// Save a budget for the "Wholesale" category (one of the seeded categories).
+curl("$base/settings/budgets", $cookie, 'POST', [
+    'csrf' => $csrfBud,
+    'cat' => ['Wholesale', ''],
+    'amt' => ['100.00', ''],
+]);
+$budRep = curl("$base/report", $cookie);
+assertHas($budRep, 'Budget vs actual', 'report shows budget vs actual section');
+assertHas($budRep, 'Wholesale', 'report budget section lists the budgeted category');
+assertHas($budRep, '$100.00', 'report shows the saved Wholesale budget of 100.00');
+assertHas(preg_match('/under|over/', $budRep) ? 'ok' : '', 'ok', 'report budget variance column renders (under/over)');
+
 // 12d) REGRESSION: admin can back up, download, and restore.
 $backupPage = curl("$base/backup", $cookie);
 assertHas($backupPage, 'Backups', 'admin can reach /backup');

@@ -79,6 +79,34 @@ use function Monster\roiChartSvg;
     </table>
 <?php endif; ?>
 
+<?php
+// Budget vs actual: only show when at least one budget is configured.
+$catKeys = array_unique(array_merge(array_keys($budgets ?? []), array_keys($actualByCategory ?? [])));
+sort($catKeys);
+if (!empty($catKeys)):
+?>
+    <h2>Budget vs actual</h2>
+    <table class="table">
+        <thead><tr><th>Category</th><th class="num">Budget</th><th class="num">Actual</th><th class="num">Variance</th></tr></thead>
+        <tbody>
+        <?php foreach ($catKeys as $c): ?>
+            <?php
+            $budget = (float) ($budgets[$c] ?? 0);
+            $actual = (float) ($actualByCategory[$c] ?? 0);
+            $var = round($budget - $actual, 2);
+            $varClass = $var >= 0 ? moneyClass($var) : 'neg';
+            ?>
+            <tr>
+                <td><?= e($c) ?></td>
+                <td class="num">$<?= money($budget) ?></td>
+                <td class="num <?= moneyClass(-$actual) ?>">$<?= money($actual) ?></td>
+                <td class="num <?= $varClass ?>"><?= $var >= 0 ? '$' . money($var) . ' under' : '-$' . money(abs($var)) . ' over' ?></td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+<?php endif; ?>
+
 <?php if (!empty($txns)): ?>
     <?php $itemMap = []; foreach ($items as $it) { $itemMap[$it->id] = $it; } ?>
     <h2>All entries</h2>
