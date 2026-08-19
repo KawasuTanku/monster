@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+// Run the app in US Central so transaction dates, daily snapshots, and backups
+// are stamped in the owner's local time regardless of the server's default TZ.
+date_default_timezone_set('America/Chicago');
+
 use Monster\App;
 use Monster\Auth;
 use Monster\Transaction;
