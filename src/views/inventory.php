@@ -78,6 +78,13 @@ use function Monster\moneyClass;
                 <td class="num"><?= $p ? '$' . money($p['revenue']) : '—' ?></td>
                 <td class="num"><?= $p ? '$' . money($p['cogs']) : '—' ?></td>
                 <td class="num <?= $p ? moneyClass($p['net']) : '' ?>"><strong><?= $p ? '$' . money($p['net']) : '—' ?></strong></td>
+                <?php $rf = 'restock-' . e($i->id); ?>
+                <td class="num restock-qty">
+                    <input type="number" min="1" step="1" name="qty" form="<?= $rf ?>" value="12" class="qty" title="Restock quantity" aria-label="Restock quantity">
+                </td>
+                <td class="num restock-cost">
+                    <input type="number" min="0" step="0.01" name="cost" form="<?= $rf ?>" value="<?= money($i->unitCost) ?>" class="cost" title="Cost per can for this restock (defaults to current cost)" aria-label="Restock cost per can">
+                </td>
                 <td class="row-actions">
                     <a href="/inventory?edit=<?= e($i->id) ?>">edit</a>
                     <form method="post" action="/inventory/adjust" class="inline">
@@ -92,11 +99,9 @@ use function Monster\moneyClass;
                         <input type="hidden" name="delta" value="1">
                         <button type="submit" class="link" title="Restock one">+1</button>
                     </form>
-                    <form method="post" action="/inventory/restock" class="inline restock">
+                    <form id="<?= $rf ?>" method="post" action="/inventory/restock" class="inline restock">
                         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
                         <input type="hidden" name="id" value="<?= e($i->id) ?>">
-                        <input type="number" min="1" step="1" name="qty" value="12" class="qty" title="Restock quantity" aria-label="Restock quantity">
-                        <input type="number" min="0" step="0.01" name="cost" value="<?= money($i->unitCost) ?>" class="cost" title="Cost per can for this restock (defaults to current cost)" aria-label="Restock cost per can">
                         <button type="submit" class="link" title="Restock & log cost">restock</button>
                     </form>
                     <form method="post" action="/inventory/delete" class="inline">
