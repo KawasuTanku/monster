@@ -68,4 +68,12 @@ run_as "mkdir -p '$DEST/data' && chmod 750 '$DEST/data'"
 echo "==> Fixing ownership"
 chown -R "$OWNER" "$DEST"
 
+# Restart FrankenPHP so it picks up the freshly-synced PHP (opcache/worker
+# otherwise keeps serving stale bytecode for edited files, which makes pages
+# that call newly-added helpers fatal and render un-themed).
+if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files frankenphp.service >/dev/null 2>&1; then
+    echo "==> Restarting frankenphp to clear opcode cache"
+    systemctl restart frankenphp.service || echo "  (warn: frankenphp restart failed; restart manually)"
+fi
+
 echo "==> Done. Visit https://monster.kawasu.wtf/setup and complete first-run setup."
