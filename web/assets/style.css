@@ -67,7 +67,8 @@ body {
 .link.danger { color: var(--neg); }
 .inline { display: inline; }
 details.reset { display: inline-block; }
-details.reset > summary { list-style: none; cursor: pointer; color: var(--accent); display: inline-flex; align-items: center; justify-content: center; }
+details.reset > summary { list-style: none; cursor: pointer; color: #000; display: inline-flex; align-items: center; justify-content: center; background: #1f8b3a; border-radius: 6px; padding: 0.25rem; }
+details.reset > summary:hover { background: #25a346; }
 details.reset > summary::-webkit-details-marker { display: none; }
 details.reset form { display: inline-flex; gap: 0.25rem; align-items: center; }
 details.reset input[type="password"] { width: 9rem; padding: 0.2rem 0.4rem; font-size: 0.9rem; }
