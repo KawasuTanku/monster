@@ -128,6 +128,11 @@ $base = '/transactions?' . http_build_query(array_filter([
                 <td class="num <?= moneyClass($t->signed()) ?>">$<?= money($t->amount) ?></td>
                 <td class="muted"><?= e($t->note) ?><?= $t->itemId !== '' ? ' · ' . e(itemLabel($itemMap[$t->itemId] ?? null)) : '' ?></td>
                 <td class="row-actions">
+                    <form method="post" action="/transactions/duplicate" class="inline">
+                        <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
+                        <input type="hidden" name="id" value="<?= e($t->id) ?>">
+                        <button type="submit" class="link" title="Duplicate as new entry" aria-label="Duplicate">dup</button>
+                    </form>
                     <a href="/transactions?edit=<?= e($t->id) ?>">edit</a>
                     <form method="post" action="/transactions/delete" class="inline">
                         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">

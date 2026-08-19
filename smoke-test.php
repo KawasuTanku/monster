@@ -236,6 +236,20 @@ $editPage = curl("$base/transactions?edit=" . urlencode($editId), $cookie);
 assertHas($editPage, 'Save changes', 'edit link opens the edit form (not login)');
 assertMissing($editPage, 'Sign in', 'edit page is not a login redirect');
 
+// 12c-2) REGRESSION: duplicate a transaction -> new entry dated today, count +1.
+$beforePage = curl("$base/transactions", $cookie);
+$beforeCount = substr_count($beforePage, 'row-actions');
+$csrfDup = '';
+if (preg_match('/name="csrf" value="([^"]+)"/', $beforePage, $mD)) { $csrfDup = $mD[1]; }
+$dupResp = curl("$base/transactions/duplicate", $cookie, 'POST', ['csrf' => $csrfDup, 'id' => $editId]);
+assertHas($dupResp, 'Duplicated as a new entry', 'duplicate creates a new entry');
+$afterPage = curl("$base/transactions", $cookie);
+$afterCount = substr_count($afterPage, 'row-actions');
+assertHas($afterCount > $beforeCount ? 'ok' : '', 'ok', 'transaction count increased after duplicate');
+$root2 = $root;
+$newTotal = (int) (new \PDO('sqlite:' . $root2 . '/data/db.sqlite'))->query('SELECT COUNT(*) FROM transactions')->fetchColumn();
+assertHas($newTotal >= 3 ? 'ok' : '', 'ok', 'duplicate persisted to store (count=' . $newTotal . ')');
+
 // 12d) REGRESSION: admin can back up, download, and restore.
 $backupPage = curl("$base/backup", $cookie);
 assertHas($backupPage, 'Backups', 'admin can reach /backup');

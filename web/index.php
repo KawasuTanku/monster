@@ -170,6 +170,30 @@ if ($uri === '/transactions/delete' && $method === 'POST') {
     header('Location: /transactions'); exit;
 }
 
+if ($uri === '/transactions/duplicate' && $method === 'POST') {
+    if (csrfValid($_POST['csrf'] ?? null)) {
+        $src = $app->txns->find($_POST['id'] ?? '');
+        if ($src !== null) {
+            // Clone as a NEW entry dated today. Inventory linkage is deliberately
+            // cleared so a duplicate of a linked sale/expense does not re-touch
+            // stock — it's a pure financial copy (ideal for recurring costs).
+            $copy = new Transaction();
+            $copy->id = bin2hex(random_bytes(12));
+            $copy->type = $src->type;
+            $copy->amount = $src->amount;
+            $copy->category = $src->category;
+            $copy->note = $src->note;
+            $copy->date = date('Y-m-d');
+            $copy->createdAt = time();
+            $copy->itemId = '';
+            $copy->qty = 1.0;
+            $app->txns->save($copy);
+            setFlash('Duplicated as a new entry.');
+        }
+    }
+    header('Location: /transactions'); exit;
+}
+
 if ($uri === '/report') {
     $filters = [
         'type' => $_GET['type'] ?? 'all',
