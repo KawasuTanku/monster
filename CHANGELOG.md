@@ -5,7 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2026-08-19
+## [0.2.0] - 2026-08-19
+
+Inventory intelligence, profitability, and off-box backups.
+
+### Added
+- **Reorder report** (`/report/reorder`): lists items at/below their reorder
+  threshold with a suggested restock quantity (top up to 2× threshold) and a
+  one-click restock that logs the COGS expense.
+- **Per-item profitability** on the inventory page: realized Revenue, COGS, and
+  Profit columns derived from item-linked transactions.
+- **Weighted-average unit cost** on restock: a new per-can cost field on the
+  restock form (and the linked-expense path) blends each batch into `unitCost`,
+  so stock value and margins track actual purchase prices.
+- **Persistent low-stock notice**: a red banner ("One or more items are low in
+  stock.") shown on every page, recomputed live from inventory so it stays until
+  the item is restocked, then clears itself.
+- **Off-box backups**: a CLI snapshot command (`bin/backup.php`) and
+  `scripts/backup-remote.sh` that rsyncs the JSON snapshots to a remote server
+  (zen.kawasu.wtf) over SSH, with remote pruning. Runs nightly via cron.
+
+### Changed
+- Restock row controls (qty, cost/ea) moved from per-row labels to dedicated
+  **Restock Qty** / **Restock Cost** header columns, aligned under their own
+  headers.
+
+
 
 First tagged release of the Monster P&L tracker — a login-protected,
 FrankenPHP-served profit & loss tracker.
@@ -55,3 +80,4 @@ FrankenPHP-served profit & loss tracker.
   Caddyfile example with internal TLS.
 
 [0.1.0]: https://github.com/KawasuTanku/monster/releases/tag/v0.1.0
+[0.2.0]: https://github.com/KawasuTanku/monster/releases/tag/v0.2.0
