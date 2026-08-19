@@ -77,13 +77,15 @@ final class Pdf
 
     /**
      * Draw one line of text at an explicit baseline $y (does NOT move cursor).
+     * Text is always drawn in solid black so a preceding rect() fill color
+     * (e.g. the pale header band) never bleeds into the glyphs.
      */
     public function textAt(string $s, float $x, float $y, ?float $size = null, bool $bold = false): void
     {
         $size ??= 11.0;
         $font = $bold ? 'F2' : 'F1';
         $this->ops[] = sprintf(
-            "BT /%s %.1f Tf 1 0 0 1 %.1f %.1f Tm (%s) Tj ET",
+            "0 0 0 rg BT /%s %.1f Tf 1 0 0 1 %.1f %.1f Tm (%s) Tj ET",
             $font, $size, $x, $y, self::escape(self::enc($s))
         );
     }
@@ -131,7 +133,7 @@ final class Pdf
             foreach ($cells as $c) {
                 $w += $c[1];
             }
-            $this->rect(self::MARGIN, $this->y - $rowH, $w, $rowH, 0.92, 0.95, 0.98);
+            $this->rect(self::MARGIN, $this->y - $rowH, $w, $rowH, 0.86, 0.90, 0.95);
         }
         // Baseline that vertically centers the text inside the row band.
         $baseline = $this->y - ($rowH / 2) - ($size / 3);
