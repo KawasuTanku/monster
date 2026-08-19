@@ -184,13 +184,18 @@ final class Auth
     private const WINDOW = 900;         // 15 minutes
     private const LOCK = 900;           // lockout duration: 15 minutes
 
-    /** Best-effort client IP, honoring a reverse proxy's X-Forwarded-For. */
+    /**
+     * Best-effort client IP for the brute-force lockout.
+     *
+     * This app runs behind FrankenPHP/Caddy on the same host, with no untrusted
+     * proxy in front, so REMOTE_ADDR is the trustworthy value. We deliberately do
+     * NOT honor X-Forwarded-For here: a real client can spoof that header, which
+     * would let an attacker rotate XFF each attempt and bypass the per-IP lockout.
+     * If a trusted reverse proxy is ever added, restrict XFF to that proxy's
+     * subnet instead of trusting it blindly.
+     */
     private function clientIp(): string
     {
-        $fwd = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
-        if (($fwd = trim(explode(',', $fwd)[0] ?? '')) !== '') {
-            return $fwd;
-        }
         return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
     }
 

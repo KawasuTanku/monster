@@ -236,7 +236,28 @@ $editPage = curl("$base/transactions?edit=" . urlencode($editId), $cookie);
 assertHas($editPage, 'Save changes', 'edit link opens the edit form (not login)');
 assertMissing($editPage, 'Sign in', 'edit page is not a login redirect');
 
-// 12c-2) REGRESSION: duplicate a transaction -> new entry dated today, count +1.
+// 12c-2) REGRESSION: saving an edit must change the amount but PRESERVE createdAt.
+// (Guards against the bug where /transactions/save overwrote createdAt every save,
+// which re-sorted the entry to the top and falsified its creation time.)
+$csrfEdit = '';
+if (preg_match('/name="csrf" value="([^"]+)"/', $txnList, $mE)) { $csrfEdit = $mE[1]; }
+$beforeCa = (int) (new \PDO('sqlite:' . $root . '/data/db.sqlite'))->query("SELECT createdAt FROM transactions WHERE id='$editId'")->fetchColumn();
+$amtBefore = (new \PDO('sqlite:' . $root . '/data/db.sqlite'))->query("SELECT amount FROM transactions WHERE id='$editId'")->fetchColumn();
+curl("$base/transactions/save", $cookie, 'POST', [
+    'csrf' => $csrfEdit,
+    'id' => $editId,
+    'type' => 'sale',
+    'amount' => (string) ((float) $amtBefore + 1),
+    'date' => '2026-08-01',
+    'category' => 'Retail',
+    'note' => 'edited-regression',
+]);
+$afterCa = (int) (new \PDO('sqlite:' . $root . '/data/db.sqlite'))->query("SELECT createdAt FROM transactions WHERE id='$editId'")->fetchColumn();
+$amtAfter = (new \PDO('sqlite:' . $root . '/data/db.sqlite'))->query("SELECT amount FROM transactions WHERE id='$editId'")->fetchColumn();
+assertHas($afterCa === $beforeCa ? 'ok' : '', 'ok', 'edit preserves createdAt (before=' . $beforeCa . ' after=' . $afterCa . ')');
+assertHas((float) $amtAfter === (float) $amtBefore + 1 ? 'ok' : '', 'ok', 'edit updates amount (before=' . $amtBefore . ' after=' . $amtAfter . ')');
+
+// 12c-3) REGRESSION: duplicate a transaction -> new entry dated today, count +1.
 $beforePage = curl("$base/transactions", $cookie);
 $beforeCount = substr_count($beforePage, 'row-actions');
 $csrfDup = '';

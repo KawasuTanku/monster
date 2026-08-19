@@ -10,6 +10,22 @@ use Monster\Auth;
 use Monster\Transaction;
 use Monster\TransactionRepository;
 use Monster\InventoryItem;
+
+// Hardened session cookie defaults. MUST be set before the first session_start()
+// (which happens the moment a view calls csrfToken()/takeFlash(), often while
+// rendering a form) — otherwise the session is created with PHP's insecure
+// defaults (no HttpOnly, no Secure, no SameSite). Computing 'secure' from the
+// request mirrors Auth::startSession() but runs early so every session benefits.
+if (session_status() === PHP_SESSION_NONE) {
+    $secure = (!empty($_SERVER['HTTPS']) || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'secure' => $secure,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+}
 use Monster\InventoryRepository;
 use function Monster\e;
 use function Monster\csrfToken;
@@ -117,7 +133,9 @@ if ($uri === '/transactions/save' && $method === 'POST') {
     $t->category = trim($_POST['category'] ?? '');
     $t->note = trim($_POST['note'] ?? '');
     $t->date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_POST['date'] ?? '') ? $_POST['date'] : date('Y-m-d');
-    $t->createdAt = time();
+    if (!$isEdit) {
+        $t->createdAt = time();
+    }
 
     // Optional inventory linkage: a new sale linked to an item decrements stock,
     // a new expense linked to an item adds stock (the "restock via transaction" path).
