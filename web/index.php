@@ -478,7 +478,7 @@ if ($uri === '/inventory/save' && $method === 'POST') {
         $item->sku = trim($_POST['sku'] ?? '');
         $item->name = trim($_POST['name'] ?? '');
         $item->variant = trim($_POST['variant'] ?? '');
-        $item->qtyOnHand = (int) ($_POST['qtyOnHand'] ?? 0);
+        $item->qtyOnHand = max(0, (int) ($_POST['qtyOnHand'] ?? 0));
         $item->unitCost = (float) ($_POST['unitCost'] ?? 0);
         $item->unitPrice = (float) ($_POST['unitPrice'] ?? 0);
         $item->reorderAt = (int) ($_POST['reorderAt'] ?? 0);
