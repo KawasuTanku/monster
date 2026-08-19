@@ -185,11 +185,13 @@ final class Pdf
             $label = $s['label'];
             $val = $s['cumNet'];
             $len = ($plotW / 2) * (abs($val) / $max);
-            // Vertical center of the bar row (bar occupies [y - barH, y]).
-            $barCenter = $this->y - $barH / 2;
+            // Vertical center of the text baseline for this row; the bar is
+            // centered on that baseline so the bar's midpoint aligns with the
+            // text (otherwise the bar hangs below the label/value).
+            $baseline = $this->y - $barH / 2 + 3.0;
             // Label sits to the left, vertically centered on the bar row.
-            $this->textAt($label, self::MARGIN, $barCenter + 3.0, 9.0);
-            $barTop = $this->y - $barH;
+            $this->textAt($label, self::MARGIN, $baseline, 9.0);
+            $barTop = $baseline - $barH / 2;
             $labelColRight = self::MARGIN + $labelW + 6.0; // never draw values left of this
             if ($val >= 0) {
                 $this->rect($zero, $barTop, $len, $barH, 0.20, 0.55, 0.30);
@@ -204,7 +206,7 @@ final class Pdf
                 $naturalLeft = $zero - $len - 4 - $this->strWidth('$' . self::num($val), 9.0);
                 $vtx = ($naturalLeft >= $labelColRight) ? $naturalLeft : ($zero + 4);
             }
-            $this->textAt('$' . self::num($val), $vtx, $barCenter + 3.0, 9.0, true);
+            $this->textAt('$' . self::num($val), $vtx, $baseline, 9.0, true);
             $this->y -= ($barH + $gap);
         }
     }
