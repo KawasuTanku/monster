@@ -176,7 +176,7 @@ final class Pdf
         foreach ($series as $s) {
             $max = max($max, abs($s['cumNet']));
         }
-        $barH = 12.0;
+        $barH = 16.0;
         $gap = 12.0;
         $labelW = 70.0;
         $plotW = $width - $labelW;
@@ -185,13 +185,13 @@ final class Pdf
             $label = $s['label'];
             $val = $s['cumNet'];
             $len = ($plotW / 2) * (abs($val) / $max);
-            // Vertical center of the text baseline for this row; the bar is
-            // centered on that baseline so the bar's midpoint aligns with the
-            // text (otherwise the bar hangs below the label/value).
-            $baseline = $this->y - $barH / 2 + 3.0;
-            // Label sits to the left, vertically centered on the bar row.
+            // Within each row the bar sits in the upper portion and the
+            // label/value text in the lower portion, so the bar reads higher
+            // than the text (rather than dead-centered on it).
+            $barTop = $this->y - 2.0;
+            $baseline = $this->y - ($barH + 6.0); // text baseline below the bar
+            // Label sits to the left, aligned with the value text.
             $this->textAt($label, self::MARGIN, $baseline, 9.0);
-            $barTop = $baseline - $barH / 2;
             $labelColRight = self::MARGIN + $labelW + 6.0; // never draw values left of this
             if ($val >= 0) {
                 $this->rect($zero, $barTop, $len, $barH, 0.20, 0.55, 0.30);
