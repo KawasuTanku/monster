@@ -31,7 +31,5 @@ final class App
         $this->txns = new TransactionRepository($this->storage);
         $this->inv = new InventoryRepository($this->storage);
         $this->backup = new Backup($this->storage);
-        // Lazily keep a daily snapshot so no cron job is required.
-        $this->backup->maybeDailySnapshot();
     }
 }

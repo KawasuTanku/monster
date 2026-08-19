@@ -77,6 +77,12 @@ if (session_status() === PHP_SESSION_NONE) {
 $app->txns->clearCache();
 $app->inv->clearCache();
 
+// Keep a daily snapshot so no cron job is required. This MUST run per request
+// (not at worker boot) or it would fire only once per worker process and go
+// stale for the life of the process under worker mode. maybeDailySnapshot() is
+// idempotent (guarded by an is_file() check) so the cost is a single stat.
+$app->backup->maybeDailySnapshot();
+
 // Resolve route from the original request URI (FrankenPHP php_server rewrites here).
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');

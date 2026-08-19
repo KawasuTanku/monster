@@ -21,6 +21,7 @@ monster.kawasu.wtf:8443 {
 		worker {
 			file /opt/caddy/monster.kawasu.wtf/web/index.php
 			num 2
+			max_requests 10000
 		}
 	}
 	file_server
