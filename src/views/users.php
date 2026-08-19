@@ -48,15 +48,13 @@ use function Monster\csrfToken;
             <td class="muted"><?= e(date('Y-m-d', (int) ($u['createdAt'] ?? 0))) ?></td>
             <td class="row-actions">
                 <?php if ($u['username'] !== $me): ?>
-                    <details class="reset">
-                        <summary class="link icon-btn" title="Reset password" aria-label="Reset password"><?= keyIcon() ?></summary>
-                        <form method="post" action="/users/reset" class="inline">
-                            <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
-                            <input type="hidden" name="user" value="<?= e($u['username']) ?>">
-                            <input type="password" name="pass" minlength="8" placeholder="new password" required>
-                            <button type="submit" class="link">set</button>
-                        </form>
-                    </details>
+                    <button type="button" class="link icon-btn reset-btn" title="Reset password" aria-label="Reset password" onclick="var f=this.nextElementSibling; f.style.display = (f.style.display==='none'||f.style.display==='') ? 'inline-flex' : 'none';"><?= keyIcon() ?></button>
+                    <form method="post" action="/users/reset" class="inline" style="display:none">
+                        <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
+                        <input type="hidden" name="user" value="<?= e($u['username']) ?>">
+                        <input type="password" name="pass" minlength="8" placeholder="new password" required>
+                        <button type="submit" class="link">set</button>
+                    </form>
                     <form method="post" action="/users/delete" class="inline">
                         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
                         <input type="hidden" name="user" value="<?= e($u['username']) ?>">
