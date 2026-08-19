@@ -59,6 +59,23 @@ final class Backup
         $this->ensureDir();
         $stamp = date('Ymd-His');
         $name = 'monster-' . $stamp . ($label !== '' ? '-' . preg_replace('/[^A-Za-z0-9_-]/', '', $label) : '') . '.json';
+        return $this->writeDump($name);
+    }
+
+    /**
+     * Write the deterministic daily snapshot `daily-YYYYMMDD.json` (overwrites the
+     * same day's file, so it is idempotent and prunable). Returns the file path.
+     * @throws \RuntimeException if the backup cannot be written.
+     */
+    public function createDaily(): string
+    {
+        $this->ensureDir();
+        return $this->writeDump('daily-' . date('Ymd') . '.json');
+    }
+
+    /** Serialize the store and write it to a named backup file. */
+    private function writeDump(string $name): string
+    {
         $dest = $this->dir . '/' . $name;
         $dump = json_encode($this->storage->exportDump(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         if ($dump === false || file_put_contents($dest, $dump, LOCK_EX) === false) {
@@ -78,7 +95,7 @@ final class Backup
         $target = $this->dir . '/daily-' . $today . '.json';
         if (!is_file($target)) {
             try {
-                $this->create('daily-' . $today);
+                $this->createDaily();
             } catch (\Throwable) {
                 // Non-fatal: a missed daily snapshot should not break boot.
             }
