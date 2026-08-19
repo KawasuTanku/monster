@@ -40,6 +40,7 @@ use function Monster\roiChartSvg;
     <button type="submit">Filter</button>
     <a class="link" href="/report">Clear</a>
     <a class="link" href="/report/export?type=<?= e($filters['type'] ?? 'all') ?>&amp;category=<?= e($filters['category'] ?? '') ?>&amp;from=<?= e($filters['from'] ?? '') ?>&amp;to=<?= e($filters['to'] ?? '') ?>">Export CSV</a>
+    <a class="link" href="/report/export-pdf?type=<?= e($filters['type'] ?? 'all') ?>&amp;category=<?= e($filters['category'] ?? '') ?>&amp;from=<?= e($filters['from'] ?? '') ?>&amp;to=<?= e($filters['to'] ?? '') ?>">Export PDF</a>
 </form>
 
 <section class="cards">

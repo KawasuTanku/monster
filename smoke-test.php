@@ -150,6 +150,15 @@ $csvExp = curl("$base/report/export?type=expense", $cookie);
 assertHas($csvExp, 'cases', 'filtered export keeps expense');
 assertMissing($csvExp, 'farmer market', 'filtered export drops sale');
 
+// 6b-2) FEATURE: PDF export returns a valid PDF document.
+$pdfAll = curl("$base/report/export-pdf", $cookie);
+assertHas(substr($pdfAll, 0, 5) === '%PDF-' ? 'ok' : '', 'ok', 'PDF export returns %PDF header');
+assertHas(str_ends_with($pdfAll, '%%EOF') ? 'ok' : '', 'ok', 'PDF export ends with %%EOF');
+assertHas(str_contains($pdfAll, 'Monster P&L Report') ? 'ok' : '', 'ok', 'PDF export contains report title');
+// Filtered PDF export respects the type filter (smaller byte count than full).
+$pdfExp = curl("$base/report/export-pdf?type=expense", $cookie);
+assertHas(substr($pdfExp, 0, 5) === '%PDF-' ? 'ok' : '', 'ok', 'filtered PDF export is valid PDF');
+
 // 6c) PHASE B: ROI chart + metrics appear on the report page.
 // Known data: sale 250.00 (08-10) - expense 90.50 (08-12) = net 159.50, ROI = 159.50/90.50 = 176.24%.
 $repRoi = curl("$base/report", $cookie);

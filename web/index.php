@@ -316,6 +316,39 @@ if ($uri === '/report/export' && $method === 'GET') {
     return;
 }
 
+if ($uri === '/report/export-pdf' && $method === 'GET') {
+    $filters = [
+        'type' => $_GET['type'] ?? 'all',
+        'category' => $_GET['category'] ?? '',
+        'from' => $_GET['from'] ?? '',
+        'to' => $_GET['to'] ?? '',
+    ];
+    $txns = $app->txns->filtered($filters);
+    $budgets = $app->storage->getSetting('budgets', []);
+    $actualByCategory = [];
+    foreach ($txns as $t) {
+        if ($t->type === Transaction::TYPE_EXPENSE && $t->category !== '') {
+            $actualByCategory[$t->category] = ($actualByCategory[$t->category] ?? 0.0) + $t->amount;
+        }
+    }
+    $pdf = \Monster\ReportPdf::build(
+        $app->txns->summary(),
+        $app->txns->roiSeries($filters),
+        $app->txns->roiOverall($filters),
+        $txns,
+        $budgets,
+        $actualByCategory,
+        $filters,
+        $user
+    );
+    $filename = 'monster-report-' . date('Ymd') . '.pdf';
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Content-Length: ' . strlen($pdf));
+    echo $pdf;
+    return;
+}
+
 if ($uri === '/settings') {
     return view('settings', [
         'title' => 'Settings', 'user' => $user, 'isAdmin' => $isAdmin,
