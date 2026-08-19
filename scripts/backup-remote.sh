@@ -38,9 +38,19 @@ if [ ! -d "$BACKUP_DIR" ]; then
     exit 1
 fi
 
+# Run a command as the app user only if we are not already that user
+# (cron invokes this script directly as APP_USER, so no sudo is needed there).
+as_app() {
+    if [ "$(id -un)" = "$APP_USER" ]; then
+        "$@"
+    else
+        sudo -u "$APP_USER" "$@"
+    fi
+}
+
 # 1. Force a fresh local snapshot (as the app user).
 log "Creating local snapshot..."
-sudo -u "$APP_USER" php "$DEPLOY_DIR/bin/backup.php" remote-cron \
+as_app php "$DEPLOY_DIR/bin/backup.php" remote-cron \
     || { log "ERROR: local snapshot failed"; exit 1; }
 
 # 2. Push the whole backups dir to the remote (incremental, perms preserved).
@@ -56,4 +66,4 @@ ssh "$SSH_DEST" \
     "find '$REMOTE_DIR' -type f \( -name 'daily-*.json' -o -name 'monster-*.json' \) -mtime +$REMOTE_KEEP_DAYS -delete" \
     || log "WARN: remote prune failed (non-fatal)"
 
-log "Done. Latest local: $(sudo -u "$APP_USER" ls -t "$BACKUP_DIR"/*.json 2>/dev/null | head -1)"
+log "Done. Latest local: $(as_app ls -t "$BACKUP_DIR"/*.json 2>/dev/null | head -1)"
