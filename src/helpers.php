@@ -96,6 +96,8 @@ function keyIcon(): string
 }
 
 /**
+ * Inline trash-can icon for delete affordances. Solid black fill so it renders
+ * reliably on the dark theme. @return string */
 function trashIcon(): string
 {
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" '
