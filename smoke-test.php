@@ -325,6 +325,27 @@ if ($toDelete !== '') {
     assertMissing($afterDelete, rawurlencode($toDelete), 'deleted backup no longer listed');
 }
 
+// 12d-4) SECURITY: restore must reject path traversal. A malicious 'file' param
+// with ../ sequences (or an absolute path) must NOT read/restore an arbitrary
+// file outside the backups directory (e.g. /etc/passwd). The route applies
+// basename() and Backup::restore() does a realpath() containment check, so the
+// request must fail with an error flash — never "Restored from …".
+$travResp = curl("$base/backup/restore", $cookie, 'POST', [
+    'csrf' => $csrfBk,
+    'file' => '../../../../../../etc/passwd',
+]);
+assertMissing($travResp, 'Restored from', 'restore rejects path traversal (no success flash)');
+assertHas($travResp, 'outside the backups directory', 'restore reports traversal target as outside backups dir');
+
+// 12d-5) SECURITY: delete must reject path traversal the same way — an attacker
+// must not be able to unlink an arbitrary file via a crafted 'file' param.
+$travDel = curl("$base/backup/delete", $cookie, 'POST', [
+    'csrf' => $csrfBk,
+    'file' => '../../../../../../etc/passwd',
+]);
+assertMissing($travDel, 'Deleted backup', 'delete rejects path traversal (no success flash)');
+assertHas($travDel, 'outside the backups directory', 'delete reports traversal target as outside backups dir');
+
 // 12e) REGRESSION: inventory add / adjust / low-stock / restock->COGS / linked sale / delete.
 $invPage = curl("$base/inventory", $cookie);
 assertHas($invPage, 'Inventory', 'admin can reach /inventory');
