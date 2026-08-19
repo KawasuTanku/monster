@@ -283,6 +283,16 @@ if ($uri === '/report') {
     ]);
 }
 
+if ($uri === '/report/reorder' && $method === 'GET') {
+    // Items at or below their reorder threshold, with a suggested restock qty.
+    $low = $app->inv->lowStock();
+    return view('reorder', [
+        'title' => 'Needs Reorder', 'user' => $user, 'isAdmin' => $isAdmin,
+        'items' => $low,
+        'totalCost' => round(array_sum(array_map(static fn(InventoryItem $i): float => $i->reorderQty() * $i->unitCost, $low)), 2),
+    ]);
+}
+
 if ($uri === '/report/export' && $method === 'GET') {
     $filters = [
         'type' => $_GET['type'] ?? 'all',

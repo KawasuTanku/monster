@@ -74,6 +74,19 @@ final class InventoryItem
         return $this->reorderAt > 0 && $this->qtyOnHand <= $this->reorderAt;
     }
 
+    /**
+     * Units to order to bring stock back up to (and a little above) the reorder
+     * threshold. Returns 0 when the item isn't flagged low. Suggests topping up
+     * to double the threshold so a single restock covers near-term demand.
+     */
+    public function reorderQty(): int
+    {
+        if ($this->reorderAt <= 0 || !$this->isLow()) {
+            return 0;
+        }
+        return max(1, ($this->reorderAt * 2) - $this->qtyOnHand);
+    }
+
     /** Per-can margin (sell price minus cost). */
     public function margin(): float
     {
