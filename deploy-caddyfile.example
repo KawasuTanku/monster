@@ -2,7 +2,12 @@
 	http_port 8080
 	https_port 8443
 #	auto_https off
-	frankenphp
+	frankenphp {
+		# max_requests is a GLOBAL FrankenPHP option (not a worker subdirective):
+		# it recycles every worker after N requests to shed slow memory growth.
+		# It applies to all workers on this FrankenPHP instance, not per-worker.
+		max_requests 10000
+	}
 	order php_server before file_server
 }
 
@@ -21,7 +26,6 @@ monster.kawasu.wtf:8443 {
 		worker {
 			file /opt/caddy/monster.kawasu.wtf/web/index.php
 			num 2
-			max_requests 10000
 		}
 	}
 	file_server
