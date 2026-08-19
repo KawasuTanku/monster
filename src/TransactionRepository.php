@@ -262,6 +262,42 @@ final class TransactionRepository
     }
 
     /**
+     * Realized per-item profit & loss, derived from item-linked transactions.
+     * A linked sale carries revenue (amount = qty x unitPrice) and a linked
+     * expense/restock carries COGS (amount = qty x unitCost), so aggregating
+     * both by itemId yields each SKU's realized performance.
+     *
+     * @return array<string, array{revenue: float, cogs: float, net: float, unitsSold: float, unitsBought: float}>
+     */
+    public function perItemPnl(): array
+    {
+        $map = [];
+        foreach ($this->all() as $t) {
+            if ($t->itemId === '') {
+                continue;
+            }
+            $row = $map[$t->itemId] ?? ['revenue' => 0.0, 'cogs' => 0.0, 'unitsSold' => 0.0, 'unitsBought' => 0.0];
+            if ($t->type === Transaction::TYPE_EXPENSE) {
+                $row['cogs'] += $t->amount;
+                $row['unitsBought'] += $t->qty;
+            } else {
+                $row['revenue'] += $t->amount;
+                $row['unitsSold'] += $t->qty;
+            }
+            $map[$t->itemId] = $row;
+        }
+        foreach ($map as &$row) {
+            $row['revenue'] = round($row['revenue'], 2);
+            $row['cogs'] = round($row['cogs'], 2);
+            $row['net'] = round($row['revenue'] - $row['cogs'], 2);
+            $row['unitsSold'] = round($row['unitsSold'], 4);
+            $row['unitsBought'] = round($row['unitsBought'], 4);
+        }
+        unset($row);
+        return $map;
+    }
+
+    /**
      * Aggregate ROI across all (filtered) transactions.
      *
      * @param array{type?: string, category?: string, from?: string, to?: string} $filters

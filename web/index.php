@@ -548,6 +548,7 @@ if ($uri === '/inventory') {
         'edit' => $edit,
         'totalValue' => $app->inv->totalStockValue(),
         'lowCount' => count($app->inv->lowStock()),
+        'pnl' => $app->txns->perItemPnl(),
     ]);
 }
 

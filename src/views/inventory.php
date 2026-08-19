@@ -7,6 +7,7 @@ use function Monster\itemLabel;
 use function Monster\trashIcon;
 use function Monster\money;
 use function Monster\csrfToken;
+use function Monster\moneyClass;
 ?>
 <h1>Inventory</h1>
 <p class="muted">Units are per can. Stock value = on-hand × unit cost.</p>
@@ -63,7 +64,7 @@ use function Monster\csrfToken;
 <?php else: ?>
     <div class="table-wrap">
     <table class="table">
-        <thead><tr><th>Name</th><th>Variant</th><th class="num">Qty</th><th class="num">Cost</th><th class="num">Price</th><th class="num">Stock $</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Variant</th><th class="num">Qty</th><th class="num">Cost</th><th class="num">Price</th><th class="num">Stock $</th><th class="num">Revenue</th><th class="num">COGS</th><th class="num">Profit</th><th></th></tr></thead>
         <tbody>
         <?php foreach ($items as $i): ?>
             <tr<?= $i->isLow() ? ' class="low"' : '' ?>>
@@ -73,6 +74,10 @@ use function Monster\csrfToken;
                 <td class="num">$<?= money($i->unitCost) ?></td>
                 <td class="num">$<?= money($i->unitPrice) ?></td>
                 <td class="num">$<?= money($i->stockValue()) ?></td>
+                <?php $p = $pnl[$i->id] ?? null; ?>
+                <td class="num"><?= $p ? '$' . money($p['revenue']) : '—' ?></td>
+                <td class="num"><?= $p ? '$' . money($p['cogs']) : '—' ?></td>
+                <td class="num <?= $p ? moneyClass($p['net']) : '' ?>"><strong><?= $p ? '$' . money($p['net']) : '—' ?></strong></td>
                 <td class="row-actions">
                     <a href="/inventory?edit=<?= e($i->id) ?>">edit</a>
                     <form method="post" action="/inventory/adjust" class="inline">
