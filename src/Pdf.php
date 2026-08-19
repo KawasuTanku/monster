@@ -176,8 +176,8 @@ final class Pdf
         foreach ($series as $s) {
             $max = max($max, abs($s['cumNet']));
         }
-        $barH = 16.0;
-        $gap = 12.0;
+        $barH = 14.0;
+        $gap = 8.0;
         $labelW = 70.0;
         $plotW = $width - $labelW;
         $zero = self::MARGIN + $labelW + ($plotW / 2); // center = zero line
@@ -185,13 +185,14 @@ final class Pdf
             $label = $s['label'];
             $val = $s['cumNet'];
             $len = ($plotW / 2) * (abs($val) / $max);
-            // Within each row the bar sits in the upper portion and the
-            // label/value text in the lower portion, so the bar reads higher
-            // than the text (rather than dead-centered on it).
-            $barTop = $this->y - 2.0;
-            $baseline = $this->y - ($barH + 6.0); // text baseline below the bar
-            // Label sits to the left, aligned with the value text.
-            $this->textAt($label, self::MARGIN, $baseline, 9.0);
+            // The cursor is the text baseline for this row. Draw the bar
+            // directly ABOVE the text with a tiny gap so the bar reads as
+            // "lifted" but stays tightly paired to its label/value (not
+            // floating disconnected).
+            $barBottom = $this->y + 6.0;
+            $barTop = $barBottom + $barH;
+            // Label sits to the left, baseline-aligned with the value text.
+            $this->textAt($label, self::MARGIN, $this->y, 9.0);
             $labelColRight = self::MARGIN + $labelW + 6.0; // never draw values left of this
             if ($val >= 0) {
                 $this->rect($zero, $barTop, $len, $barH, 0.20, 0.55, 0.30);
@@ -206,7 +207,7 @@ final class Pdf
                 $naturalLeft = $zero - $len - 4 - $this->strWidth('$' . self::num($val), 9.0);
                 $vtx = ($naturalLeft >= $labelColRight) ? $naturalLeft : ($zero + 4);
             }
-            $this->textAt('$' . self::num($val), $vtx, $baseline, 9.0, true);
+            $this->textAt('$' . self::num($val), $vtx, $this->y, 9.0, true);
             $this->y -= ($barH + $gap);
         }
     }
