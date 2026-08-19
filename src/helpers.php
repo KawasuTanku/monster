@@ -84,13 +84,13 @@ function itemLabel(?\Monster\InventoryItem $item, string $fallback = ''): string
     return $label;
 }
 
-/** Inline key icon for password-reset affordances. Solid black fill so it
- *  reads clearly on the green reset chip. @return string */
+/** Inline key glyph for password-reset affordances. Uses the Unicode key
+ *  emoji forced to solid black via CSS (filter:brightness(0)) so it renders
+ *  reliably on the green reset chip without depending on SVG support.
+ *  @return string */
 function keyIcon(): string
 {
-    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" '
-        . 'class="icon-key" aria-hidden="true" focusable="false" fill="#000" '
-        . 'd="M14 2a6 6 0 0 0-5.8 7.6L2 15.8V22h6.2l1.2-1.2h2V19h2v-2h2.2A6 6 0 1 0 14 2zm0 3.2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6z"/></svg>';
+    return '<span class="icon-key" aria-hidden="true" focusable="false">🔑</span>';
 }
 
 /**
