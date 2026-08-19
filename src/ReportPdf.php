@@ -36,9 +36,8 @@ final class ReportPdf
         $m = Pdf::margin();
         $w = Pdf::pageWidth() - 2 * $m;
 
-        // ---- Title + meta ----
-        $pdf->text('Monster P&L Report', $m, 18.0, true);
-        $pdf->down(6);
+        // ---- Title + meta (each line advances by its font size; no overlap) ----
+        $pdf->line('Monster P&L Report', $m, 18.0, true, 8.0);
         $sub = 'Owner: ' . $owner;
         $filterBits = [];
         if (($filters['type'] ?? 'all') !== 'all') {
@@ -56,47 +55,46 @@ final class ReportPdf
         if ($filterBits !== []) {
             $sub .= '  |  filters: ' . implode(', ', $filterBits);
         }
-        $pdf->text($sub, $m, 9.0);
-        $pdf->down(4);
-        $pdf->text('Generated: ' . date('Y-m-d H:i'), $m, 9.0);
-        $pdf->down(16);
+        $pdf->line($sub, $m, 9.0, false, 2.0);
+        $pdf->line('Generated: ' . date('Y-m-d H:i'), $m, 9.0, false, 12.0);
 
-        // ---- Summary stat cards ----
-        $pdf->text('Summary', $m, 13.0, true);
-        $pdf->down(16);
+        // ---- Summary stat cards (label above value, 4 columns) ----
+        $pdf->line('Summary', $m, 13.0, true, 6.0);
         $statCols = [
             ['Revenue', '$' . number_format($summary['revenue'], 2)],
             ['Expenses', '$' . number_format($summary['expenses'], 2)],
             ['Net Profit', '$' . number_format($summary['net'], 2)],
             ['ROI', number_format($roiOverall['roiPct'], 2) . '%'],
         ];
-        // Lay out the four cards left-to-right.
         $colW = $w / 4;
-        $x0 = $m;
+        $cardTop = $pdf->getY();
+        $ci = 0;
         foreach ($statCols as [$label, $val]) {
-            $pdf->text($label, $x0, 9.0);
-            $pdf->text($val, $x0, 13.0, true);
-            $x0 += $colW;
+            $cx = $m + $ci * $colW;
+            $pdf->setY($cardTop);
+            $pdf->line($label, $cx, 9.0, false, 2.0);
+            $pdf->line($val, $cx, 13.0, true, 0.0);
+            $ci++;
         }
-        $pdf->down(26);
+        // Move below the tallest card.
+        $pdf->setY($cardTop - 26);
+        $pdf->down(8);
 
         // ---- Monthly cumulative net chart ----
         if ($roiSeries !== []) {
-            $pdf->text('Cumulative Net Profit by Month', $m, 13.0, true);
-            $pdf->down(18);
+            $pdf->line('Cumulative Net Profit by Month', $m, 13.0, true, 8.0);
             $chartSeries = array_map(static fn ($r) => ['label' => $r['label'], 'cumNet' => $r['cumNet']], $roiSeries);
             $pdf->barChart($chartSeries, $w);
-            $pdf->down(10);
+            $pdf->down(8);
         }
 
         // ---- Budget vs actual ----
         $catKeys = array_unique(array_merge(array_keys($budgets), array_keys($actualByCategory)));
         sort($catKeys);
         if ($catKeys !== []) {
-            $pdf->text('Budget vs Actual', $m, 13.0, true);
-            $pdf->down(16);
+            $pdf->line('Budget vs Actual', $m, 13.0, true, 6.0);
             $pdf->row([
-                ['Category', $colW = $w * 0.34, 'L'],
+                ['Category', $w * 0.34, 'L'],
                 ['Budget', $w * 0.22, 'R'],
                 ['Actual', $w * 0.22, 'R'],
                 ['Variance', $w * 0.22, 'R'],
@@ -113,15 +111,13 @@ final class ReportPdf
                     [$varStr, $w * 0.22, 'R'],
                 ]);
             }
-            $pdf->down(10);
+            $pdf->down(8);
         }
 
         // ---- Transactions ----
-        $pdf->text('Transactions', $m, 13.0, true);
-        $pdf->down(16);
+        $pdf->line('Transactions', $m, 13.0, true, 6.0);
         if ($txns === []) {
-            $pdf->text('No transactions in the selected range.', $m, 10.0);
-            $pdf->down(14);
+            $pdf->line('No transactions in the selected range.', $m, 10.0, false, 8.0);
         } else {
             $pdf->row([
                 ['Date', $w * 0.16, 'L'],

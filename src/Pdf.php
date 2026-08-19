@@ -12,6 +12,12 @@ namespace Monster;
  * stream. Text is encoded as WinAnsiEncoding (CP1252), which covers the Latin
  * characters and the $/–/* glyphs this app emits. Anything outside that range
  * is transliterated to ASCII so we never emit an invalid byte.
+ *
+ * Layout model: the cursor ($y) tracks the BASELINE of the next line of text,
+ * measured from the bottom of the page (PDF coordinates). textAt() draws at an
+ * explicit y WITHOUT moving the cursor; line() draws at the cursor and then
+ * advances it downward by the font size + leading. This keeps lines from
+ * overlapping regardless of font size.
  */
 final class Pdf
 {
@@ -41,7 +47,6 @@ final class Pdf
     /** Convert a UTF-8 string to WinAnsi (CP1252) byte sequence. */
     private static function enc(string $s): string
     {
-        // Common Unicode → CP1252 fixes, then transliterate the rest.
         $s = preg_replace_callback('/[^\x00-\x7F]/u', static function (array $m): string {
             $c = mb_ord($m[0], 'UTF-8');
             static $map = [
@@ -52,28 +57,46 @@ final class Pdf
             if (isset($map[$c])) {
                 return $map[$c];
             }
-            // Fall back: keep ASCII-ish letters, drop the rest.
             $ascii = iconv('UTF-8', 'ASCII//TRANSLIT', $m[0]);
             return ($ascii === false || $ascii === '') ? '' : $ascii;
         }, $s) ?? $s;
         return $s;
     }
 
-    /** Escape a string for inclusion inside a PDF literal string (parentheses). */
+    /** Escape a string for inclusion inside a PDF literal string. */
     private static function escape(string $s): string
     {
         return str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $s);
     }
 
-    /** Emit a line of text at the current cursor (font size in points). */
-    public function text(string $s, float $x, ?float $size = null, bool $bold = false): void
+    /** Rough string width estimate in points (Helvetica is ~0.5em avg). */
+    private function strWidth(string $s, float $size): float
+    {
+        return mb_strlen(self::enc($s), '8bit') * $size * 0.5;
+    }
+
+    /**
+     * Draw one line of text at an explicit baseline $y (does NOT move cursor).
+     */
+    public function textAt(string $s, float $x, float $y, ?float $size = null, bool $bold = false): void
     {
         $size ??= 11.0;
         $font = $bold ? 'F2' : 'F1';
         $this->ops[] = sprintf(
             "BT /%s %.1f Tf 1 0 0 1 %.1f %.1f Tm (%s) Tj ET",
-            $font, $size, $x, $this->y, self::escape(self::enc($s))
+            $font, $size, $x, $y, self::escape(self::enc($s))
         );
+    }
+
+    /**
+     * Draw a line of text at the current cursor baseline, then advance the
+     * cursor down by $size + $leading so the next line never overlaps.
+     */
+    public function line(string $s, float $x, ?float $size = null, bool $bold = false, float $leading = 4.0): void
+    {
+        $size ??= 11.0;
+        $this->textAt($s, $x, $this->y, $size, $bold);
+        $this->y -= ($size + $leading);
     }
 
     /** Move the cursor down by $dy points (positive = downward). */
@@ -94,7 +117,8 @@ final class Pdf
 
     /**
      * Draw a single table row from cells. Each cell is [$text, $width, $align]
-     * where $align is 'L'|'R'|'C'. $rowH is the line height in points.
+     * where $align is 'L'|'R'|'C'. Text is vertically centered within the row
+     * band; the cursor advances by $rowH afterward.
      *
      * @param list<array{0: string, 1: float, 2: string}> $cells
      */
@@ -103,13 +127,14 @@ final class Pdf
         $x = self::MARGIN;
         $size = $header ? 10.0 : 9.5;
         if ($header) {
-            // Header background band.
             $w = 0.0;
             foreach ($cells as $c) {
                 $w += $c[1];
             }
-            $this->rect(self::MARGIN, $this->y - $rowH + 3.0, $w, $rowH, 0.92, 0.95, 0.98);
+            $this->rect(self::MARGIN, $this->y - $rowH, $w, $rowH, 0.92, 0.95, 0.98);
         }
+        // Baseline that vertically centers the text inside the row band.
+        $baseline = $this->y - ($rowH / 2) - ($size / 3);
         foreach ($cells as [$text, $w, $align]) {
             $pad = 4.0;
             if ($align === 'R') {
@@ -119,10 +144,10 @@ final class Pdf
             } else {
                 $tx = $x + $pad;
             }
-            $this->text($text, $tx, $size, $header);
+            $this->textAt($text, $tx, $baseline, $size, $header);
             $x += $w;
         }
-        $this->down($rowH);
+        $this->y -= $rowH;
     }
 
     /** Filled rectangle (for bars and header bands). */
@@ -135,7 +160,8 @@ final class Pdf
     }
 
     /**
-     * Draw a horizontal bar chart of monthly cumulative net profit.
+     * Draw a horizontal bar chart of monthly cumulative net profit. Each series
+     * entry occupies a row of height $barH + $gap below the current cursor.
      *
      * @param list<array{label: string, cumNet: float}> $series
      */
@@ -144,28 +170,31 @@ final class Pdf
         if ($series === []) {
             return;
         }
-        $max = 0.0;
+        $max = 1.0;
         foreach ($series as $s) {
             $max = max($max, abs($s['cumNet']));
         }
-        $max = max($max, 1.0);
         $barH = 12.0;
-        $gap = 6.0;
+        $gap = 8.0;
         $labelW = 70.0;
         $plotW = $width - $labelW;
         $zero = self::MARGIN + $labelW + ($plotW / 2); // center = zero line
         foreach ($series as $s) {
             $label = $s['label'];
-            $this->text($label, self::MARGIN, 9.0);
             $val = $s['cumNet'];
             $len = ($plotW / 2) * (abs($val) / $max);
+            // Label sits to the left, vertically centered on the bar row.
+            $this->textAt($label, self::MARGIN, $this->y - $barH / 2 - 3.0, 9.0);
+            $barTop = $this->y - $barH;
             if ($val >= 0) {
-                $this->rect($zero, $this->y - $barH + 2, $len, $barH, 0.20, 0.55, 0.30);
+                $this->rect($zero, $barTop, $len, $barH, 0.20, 0.55, 0.30);
+                $vtx = $zero + $len + 4;
             } else {
-                $this->rect($zero - $len, $this->y - $barH + 2, $len, $barH, 0.70, 0.25, 0.25);
+                $this->rect($zero - $len, $barTop, $len, $barH, 0.70, 0.25, 0.25);
+                $vtx = $zero - $len - 4 - $this->strWidth('$' . self::num($val), 9.0);
             }
-            $this->text('$' . self::num($val), $zero + ($val >= 0 ? $len + 4 : -$len - 4 - $this->strWidth('$' . self::num($val), 9.0)), 9.0, true);
-            $this->down($barH + $gap);
+            $this->textAt('$' . self::num($val), $vtx, $this->y - $barH / 2 - 3.0, 9.0, true);
+            $this->y -= ($barH + $gap);
         }
     }
 
@@ -175,30 +204,18 @@ final class Pdf
         return number_format($v, 2, '.', ',');
     }
 
-    /** Rough string width estimate in points (Helvetica is ~0.5em avg). */
-    private function strWidth(string $s, float $size): float
-    {
-        return mb_strlen(self::enc($s), '8bit') * $size * 0.5;
-    }
-
     /** Render to a PDF document string. */
     public function output(): string
     {
         $content = implode("\n", $this->ops);
         $objects = [];
 
-        // 1: Catalog
         $objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
-        // 2: Pages
         $objects[2] = "<< /Type /Pages /Kids [3 0 R] /Count 1 >>";
-        // 3: Page
         $objects[3] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " . self::PAGE_W . " " . self::PAGE_H . "] "
             . "/Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>";
-        // 4: Helvetica
         $objects[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
-        // 5: Helvetica-Bold
         $objects[5] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>";
-        // 6: Content stream
         $stream = "BT /F1 11 Tf ET\n" . $content;
         $objects[6] = $this->stream($stream);
 
