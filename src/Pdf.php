@@ -196,9 +196,13 @@ final class Pdf
                 $vtx = $zero + $len + 4;
             } else {
                 $this->rect($zero - $len, $barTop, $len, $barH, 0.70, 0.25, 0.25);
-                // Value goes left of the bar's left end, but clamp so it never
-                // slides back over the month label column.
-                $vtx = max($zero - $len - 4 - $this->strWidth('$' . self::num($val), 9.0), $labelColRight);
+                // Value normally sits just left of the bar's left end. But for a
+                // short loss the bar is near the zero line, so that spot falls
+                // either on the label column or on top of the bar. In that case
+                // place the value to the RIGHT of the zero line instead — always
+                // outside the (left-of-zero) red bar and clear of the label.
+                $naturalLeft = $zero - $len - 4 - $this->strWidth('$' . self::num($val), 9.0);
+                $vtx = ($naturalLeft >= $labelColRight) ? $naturalLeft : ($zero + 4);
             }
             $this->textAt('$' . self::num($val), $vtx, $barCenter + 3.0, 9.0, true);
             $this->y -= ($barH + $gap);
