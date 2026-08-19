@@ -5,73 +5,216 @@ declare(strict_types=1);
 namespace Monster;
 
 /**
- * Tiny dependency-free JSON-file storage with atomic writes and read-modify-write
- * safety. Intentionally minimal: a small side business does not need a full RDBMS,
- * and this keeps the app deployable on the FrankenPHP runtime (no PDO/sqlite).
+ * SQLite-backed storage for Monster.
  *
- * The storage layer is the ONLY thing that knows data lives on disk, so swapping
- * to a real database later is a localized change.
+ * This class is the ONLY thing that knows data lives on disk, so the rest of the
+ * app is insulated from the storage format. It exposes the same collection-style
+ * API the app was written against (getList/find/put/delete over collections, plus
+ * a settings namespace), implemented on top of a single SQLite file.
+ *
+ * Why SQLite instead of the old JSON file: the FrankenPHP runtime (PHP 8.5 /
+ * FrankenPHP v1.12+) ships both pdo_sqlite and sqlite3, so a real database is
+ * available without extra setup. SQLite gives us transactional writes, real
+ * aggregation, and JOINs that the JSON layer used to fake in PHP.
+ *
+ * Migration: if a legacy db.json exists next to the target sqlite file, it is
+ * imported automatically on first construction (idempotent — a filled DB is
+ * never re-imported).
  */
 final class Storage
 {
+    private \PDO $pdo;
     private string $file;
-    private bool $loaded = false;
-    /** @var array<string, mixed> */
-    private array $data = [];
 
     public function __construct(string $file)
     {
         $this->file = $file;
+        $dir = dirname($file);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0o750, true);
+        }
+        $this->pdo = new \PDO('sqlite:' . $file);
+        $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $this->pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
+        $this->pdo->exec('PRAGMA journal_mode=WAL');
+        $this->ensureSchema();
     }
 
-    /** Path to the backing file (used by the app to report storage location). */
+    /** Path to the backing file (used by Backup and to report storage location). */
     public function path(): string
     {
         return $this->file;
     }
 
-    /** @return array<string, mixed> */
-    private function load(): array
+    /** Expose the underlying PDO for the repositories' SQL queries. */
+    public function pdo(): \PDO
     {
-        if ($this->loaded) {
-            return $this->data;
-        }
-        $this->loaded = true;
-        if (!is_file($this->file)) {
-            $this->data = [];
-            return $this->data;
-        }
-        $raw = file_get_contents($this->file);
-        if ($raw === false) {
-            throw new \RuntimeException("Unable to read storage file: {$this->file}");
-        }
-        $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
-        $this->data = is_array($decoded) ? $decoded : [];
-        return $this->data;
+        return $this->pdo;
     }
 
-    /** @param array<string, mixed> $data */
-    private function save(array $data): void
+    private function ensureSchema(): void
     {
-        $dir = dirname($this->file);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0o750, true);
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS transactions (
+    id          TEXT PRIMARY KEY,
+    type        TEXT NOT NULL,
+    amount      REAL NOT NULL,
+    category    TEXT NOT NULL DEFAULT '',
+    note        TEXT NOT NULL DEFAULT '',
+    date        TEXT NOT NULL,
+    createdAt   INTEGER NOT NULL,
+    itemId      TEXT NOT NULL DEFAULT '',
+    qty         REAL NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS inventory (
+    id          TEXT PRIMARY KEY,
+    sku         TEXT NOT NULL DEFAULT '',
+    name        TEXT NOT NULL DEFAULT '',
+    variant     TEXT NOT NULL DEFAULT '',
+    qtyOnHand   INTEGER NOT NULL DEFAULT 0,
+    unitCost    REAL NOT NULL DEFAULT 0,
+    unitPrice   REAL NOT NULL DEFAULT 0,
+    reorderAt   INTEGER NOT NULL DEFAULT 0,
+    supplier    TEXT NOT NULL DEFAULT '',
+    createdAt   INTEGER NOT NULL DEFAULT 0,
+    updatedAt   INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS users (
+    id           TEXT PRIMARY KEY,
+    username     TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    role         TEXT NOT NULL,
+    createdAt    INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
+SQL);
+
+        // Import a legacy JSON store if present and the DB is empty.
+        $legacyJson = dirname($this->file) . '/db.json';
+        if (is_file($legacyJson) && $this->isEmpty()) {
+            $this->importLegacyJson($legacyJson);
         }
-        $tmp = $this->file . '.' . getmypid() . '.' . bin2hex(random_bytes(6)) . '.tmp';
-        $bytes = file_put_contents(
-            $tmp,
-            json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-            LOCK_EX
-        );
-        if ($bytes === false) {
-            throw new \RuntimeException("Unable to write storage tmp file: {$tmp}");
+    }
+
+    /**
+     * Serialize the whole store as a plain array (the same shape as the legacy
+     * db.json). Used by Backup to produce portable, human-readable snapshots.
+     * @return array{transactions: list<array<string, mixed>>, inventory: list<array<string, mixed>>, users: list<array<string, mixed>>, settings: array<string, mixed>}
+     */
+    public function exportDump(): array
+    {
+        $settings = [];
+        foreach ($this->pdo->query('SELECT key, value FROM settings')->fetchAll() as $r) {
+            $settings[$r['key']] = json_decode($r['value'], true);
         }
-        if (!rename($tmp, $this->file)) {
-            @unlink($tmp);
-            throw new \RuntimeException("Unable to commit storage file: {$this->file}");
+        return [
+            'transactions' => $this->getList('transactions'),
+            'inventory' => $this->getList('inventory'),
+            'users' => $this->getList('users'),
+            'settings' => $settings,
+        ];
+    }
+
+    /**
+     * Replace the entire store with the given dump (same shape as exportDump() /
+     * a legacy db.json). Runs in a single transaction so a half-written restore
+     * can never leave the store corrupted.
+     * @param array<string, mixed> $dump
+     */
+    public function loadDump(array $dump): void
+    {
+        $txCols = ['id', 'type', 'amount', 'category', 'note', 'date', 'createdAt', 'itemId', 'qty'];
+        $invCols = ['id', 'sku', 'name', 'variant', 'qtyOnHand', 'unitCost', 'unitPrice', 'reorderAt', 'supplier', 'createdAt', 'updatedAt'];
+        $userCols = ['id', 'username', 'password_hash', 'role', 'createdAt'];
+
+        $this->pdo->exec('BEGIN');
+        try {
+            $this->pdo->exec('DELETE FROM transactions');
+            $this->pdo->exec('DELETE FROM inventory');
+            $this->pdo->exec('DELETE FROM users');
+            $this->pdo->exec('DELETE FROM settings');
+            $this->insertRows('transactions', $txCols, $dump['transactions'] ?? []);
+            $this->insertRows('inventory', $invCols, $dump['inventory'] ?? []);
+            $this->insertRows('users', $userCols, $dump['users'] ?? []);
+            foreach (($dump['settings'] ?? []) as $k => $v) {
+                $this->setSetting((string) $k, $v);
+            }
+            $this->pdo->exec('COMMIT');
+        } catch (\Throwable $e) {
+            $this->pdo->exec('ROLLBACK');
+            throw $e;
         }
-        $this->loaded = true;
-        $this->data = $data;
+    }
+
+    private function isEmpty(): bool
+    {
+        $count = (int) $this->pdo->query(
+            'SELECT (SELECT COUNT(*) FROM transactions) + (SELECT COUNT(*) FROM inventory) + (SELECT COUNT(*) FROM users) + (SELECT COUNT(*) FROM settings)'
+        )->fetchColumn();
+        return $count === 0;
+    }
+
+    /**
+     * Import a db.json written by the old JSON Storage format.
+     * Collections (transactions/inventory/users) become rows; top-level
+     * `settings` keys (user / password_hash / throttle) become settings rows.
+     */
+    private function importLegacyJson(string $legacyJson): void
+    {
+        $raw = file_get_contents($legacyJson);
+        if ($raw === false) {
+            return;
+        }
+        try {
+            $data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return;
+        }
+        if (!is_array($data)) {
+            return;
+        }
+
+        $txCols = ['id', 'type', 'amount', 'category', 'note', 'date', 'createdAt', 'itemId', 'qty'];
+        $invCols = ['id', 'sku', 'name', 'variant', 'qtyOnHand', 'unitCost', 'unitPrice', 'reorderAt', 'supplier', 'createdAt', 'updatedAt'];
+        $userCols = ['id', 'username', 'password_hash', 'role', 'createdAt'];
+
+        $this->insertRows('transactions', $txCols, $data['transactions'] ?? []);
+        $this->insertRows('inventory', $invCols, $data['inventory'] ?? []);
+        $this->insertRows('users', $userCols, $data['users'] ?? []);
+
+        foreach (($data['settings'] ?? []) as $k => $v) {
+            $this->setSetting((string) $k, $v);
+        }
+
+        // Rename the consumed JSON so a re-run never double-imports it.
+        @rename($legacyJson, $legacyJson . '.imported');
+    }
+
+    /**
+     * @param list<string> $cols
+     * @param mixed $rows
+     */
+    private function insertRows(string $table, array $cols, $rows): void
+    {
+        if (!is_array($rows) || $rows === []) {
+            return;
+        }
+        $colList = implode(', ', $cols);
+        $placeholders = implode(', ', array_fill(0, count($cols), '?'));
+        $stmt = $this->pdo->prepare("INSERT OR REPLACE INTO $table ($colList) VALUES ($placeholders)");
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $values = [];
+            foreach ($cols as $c) {
+                $values[] = $row[$c] ?? null;
+            }
+            $stmt->execute($values);
+        }
     }
 
     /**
@@ -80,9 +223,13 @@ final class Storage
      */
     public function getList(string $key): array
     {
-        $data = $this->load();
-        $list = $data[$key] ?? [];
-        return is_array($list) ? array_values($list) : [];
+        $table = $this->tableFor($key);
+        $rows = $this->pdo->query("SELECT * FROM $table ORDER BY rowid")->fetchAll();
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = $this->normalize($row);
+        }
+        return $out;
     }
 
     /**
@@ -91,16 +238,17 @@ final class Storage
      */
     public function find(string $key, string $id): ?array
     {
-        foreach ($this->getList($key) as $item) {
-            if (is_array($item) && ($item['id'] ?? null) === $id) {
-                return $item;
-            }
-        }
-        return null;
+        $table = $this->tableFor($key);
+        $stmt = $this->pdo->prepare("SELECT * FROM $table WHERE id = ?");
+        $stmt->execute([$id]);
+        $row = $stmt->fetch();
+        return $row === false ? null : $this->normalize($row);
     }
 
     /**
-     * Insert or update a record by id, preserving insertion order.
+     * Insert or update a record by id. The full row is (re)written so columns
+     * not present in the record keep their previous value rather than nulling —
+     * matching the JSON put() contract where the whole record is replaced.
      * @param array<string, mixed> $record Must contain an "id" key.
      */
     public function put(string $key, array $record): void
@@ -108,22 +256,18 @@ final class Storage
         if (!isset($record['id'])) {
             throw new \InvalidArgumentException('Record must contain an "id" key');
         }
-        $data = $this->load();
-        $list = is_array($data[$key] ?? null) ? $data[$key] : [];
-        $replaced = false;
-        foreach ($list as &$item) {
-            if (is_array($item) && ($item['id'] ?? null) === $record['id']) {
-                $item = $record;
-                $replaced = true;
-                break;
-            }
-        }
-        unset($item);
-        if (!$replaced) {
-            $list[] = $record;
-        }
-        $data[$key] = $list;
-        $this->save($data);
+        $table = $this->tableFor($key);
+        $existing = $this->find($key, (string) $record['id']) ?? [];
+        $merged = array_merge($existing, $record);
+
+        $cols = array_keys($merged);
+        $colList = implode(', ', $cols);
+        $placeholderList = implode(', ', array_fill(0, count($cols), '?'));
+        $updateList = implode(', ', array_map(static fn($c) => "$c = excluded.$c", $cols));
+        $sql = "INSERT INTO $table ($colList) VALUES ($placeholderList)
+                ON CONFLICT(id) DO UPDATE SET $updateList";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute(array_values($merged));
     }
 
     /**
@@ -131,36 +275,54 @@ final class Storage
      */
     public function delete(string $key, string $id): bool
     {
-        $data = $this->load();
-        $list = is_array($data[$key] ?? null) ? $data[$key] : [];
-        $next = [];
-        $removed = false;
-        foreach ($list as $item) {
-            if (is_array($item) && ($item['id'] ?? null) === $id) {
-                $removed = true;
-                continue;
-            }
-            $next[] = $item;
-        }
-        if ($removed) {
-            $data[$key] = $next;
-            $this->save($data);
-        }
-        return $removed;
+        $table = $this->tableFor($key);
+        $stmt = $this->pdo->prepare("DELETE FROM $table WHERE id = ?");
+        $stmt->execute([$id]);
+        return $stmt->rowCount() > 0;
     }
 
-    /** Read a scalar setting. */
+    /** Read a scalar setting (stored JSON-encoded so any type round-trips). */
     public function getSetting(string $key, mixed $default = null): mixed
     {
-        $data = $this->load();
-        return $data['settings'][$key] ?? $default;
+        $stmt = $this->pdo->prepare('SELECT value FROM settings WHERE key = ?');
+        $stmt->execute([$key]);
+        $row = $stmt->fetch();
+        if ($row === false || $row['value'] === null) {
+            return $default;
+        }
+        return json_decode($row['value'], true);
     }
 
     /** Write a scalar setting. */
     public function setSetting(string $key, mixed $value): void
     {
-        $data = $this->load();
-        $data['settings'][$key] = $value;
-        $this->save($data);
+        $stmt = $this->pdo->prepare('INSERT INTO settings (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+        $stmt->execute([$key, json_encode($value)]);
+    }
+
+    /** Map a collection key to its SQLite table. */
+    private function tableFor(string $key): string
+    {
+        return match ($key) {
+            'transactions', 'inventory', 'users' => $key,
+            default => throw new \InvalidArgumentException("Unknown collection: $key"),
+        };
+    }
+
+    /** Cast SQLite numeric columns back to the int/float the app expects. */
+    private function normalize(array $row): array
+    {
+        foreach (['amount', 'unitCost', 'unitPrice', 'qty'] as $f) {
+            if (isset($row[$f]) && is_numeric($row[$f])) {
+                $row[$f] = (float) $row[$f];
+            }
+        }
+        foreach (['createdAt', 'updatedAt', 'qtyOnHand', 'reorderAt'] as $i) {
+            if (isset($row[$i]) && is_numeric($row[$i])) {
+                $row[$i] = (int) $row[$i];
+            }
+        }
+        return $row;
     }
 }

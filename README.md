@@ -24,24 +24,31 @@ monster/
 │   └── assets/style.css # dark UI
 ├── src/
 │   ├── App.php          # wiring + data-dir resolution
-│   ├── Storage.php      # atomic JSON-file storage (no DB dependency)
+│   ├── Storage.php      # SQLite-backed storage (no DB server; single db.sqlite file)
 │   ├── Transaction.php  # domain object (sale/expense, signed amounts)
 │   ├── TransactionRepository.php
 │   ├── Auth.php         # multi-user session auth, roles, hashed passwords
 │   ├── helpers.php      # e()/money()/csrf*/flash helpers
-│   └── views/           # login, dashboard, transactions, report, settings, users, layout
-├── data/db.json         # <-- created at runtime (OUTSIDE doc root, not web-served)
+│   └── views/           # login, dashboard, transactions, report, settings, users, backup, layout
+├── data/db.sqlite      # <-- created at runtime (OUTSIDE doc root, not web-served)
 ├── composer.json
 ├── smoke-test.php       # headless end-to-end test
 └── deploy.sh            # pull + install into the Caddy doc root
 ```
 
-### Why JSON storage, not a database?
+### Why SQLite (not JSON, not a database server)?
 
-FrankenPHP's embedded PHP on this host has **no PDO / sqlite / mysqli** modules,
-and MariaDB isn't reachable from the runtime. For a small side business, a single
-atomic JSON file is plenty, and the `Storage` class is the only thing that knows
-data lives on disk — swapping in a real database later is a localized change.
+FrankenPHP on this host ships **both `pdo_sqlite` and `sqlite3`** (verified live on
+FrankenPHP v1.12.7 / PHP 8.5), so a real SQL database is available with zero extra
+setup — no DB server to run, no PDO/sqlite extension to install. A single
+`data/db.sqlite` file gives transactional writes, real SQL aggregation, and JOINs
+(which an earlier JSON-file store faked in PHP). The `Storage` class is the only
+thing that knows data lives on disk, so the storage engine stays localized.
+
+**Migrating from the old JSON store:** if a legacy `data/db.json` is found next to
+`db.sqlite` on first boot, it is imported automatically (and renamed to
+`db.json.imported`) — no manual step. Backup snapshots are portable JSON dumps of the
+store, so they restore onto either backend.
 
 ## Running locally
 
@@ -87,4 +94,6 @@ promoted to admin — no manual step required.
 - Session cookie is `HttpOnly`, `SameSite=Lax`, and `Secure` when behind HTTPS.
 - All state-changing forms carry a CSRF token verified server-side.
 - The `/users` management area is admin-only (403 for members).
-- `data/db.json` lives outside the document root, so it is never web-served.
+- `data/db.sqlite` lives outside the document root, so it is never web-served.
+- Backup snapshots are written to `data/backups/` (gitignored); they are portable
+  JSON dumps of the store, not raw copies of the sqlite file.

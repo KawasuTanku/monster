@@ -157,9 +157,11 @@ assertHas($repRoi, 'Aug 2026', 'monthly breakdown labels period (Aug 2026)');
 $repRoiExp = curl("$base/report?type=expense", $cookie);
 assertHas($repRoiExp, '-100.00%', 'expense-only filter yields -100.00% ROI (no revenue, full cost lost)');
 
-// 7) Persistence: re-read file directly to confirm it is on disk.
-$db = json_decode(file_get_contents($root . '/data/db.json'), true);
-assertHas(count($db['transactions'] ?? []) === 2 ? 'ok' : '', 'ok', 'two transactions persisted to db.json');
+// 7) Persistence: re-read the store directly to confirm it is on disk.
+$sqliteFile = $root . '/data/db.sqlite';
+$pdo = new \PDO('sqlite:' . $sqliteFile);
+$txnCount = (int) $pdo->query('SELECT COUNT(*) FROM transactions')->fetchColumn();
+assertHas($txnCount === 2 ? 'ok' : '', 'ok', 'two transactions persisted to store');
 
 // 8) Logout then protected route should not leak dashboard.
 // Use a throwaway jar so the primary admin jar ($cookie) stays authenticated
@@ -308,17 +310,10 @@ assertHas($repExp, 'linked restock', 'linked expense appears in report');
 assertHas($repExp, '$140.00', 'linked expense amount = 10 x 14 = 140 logged');
 
 // Delete the linked expense -> stock should drop back by 10 (22 -> 12).
-// Resolve the transaction id from the data store directly (immune to list
-// ordering / date-sorting), rather than scraping the HTML table.
-$txnList = curl("$base/transactions", $cookie);
-$expId = '';
-$store = json_decode((string) @file_get_contents($root . '/data_test/db.json'), true) ?: [];
-foreach ($store['transactions'] ?? [] as $tx) {
-    if (($tx['note'] ?? '') === 'linked restock' && ($tx['itemId'] ?? '') !== '') {
-        $expId = $tx['id'];
-        break;
-    }
-}
+// Resolve the transaction id from the store directly (immune to list ordering /
+// date-sorting), rather than scraping the HTML table.
+$pdoMig = new \PDO('sqlite:' . $root . '/data_test/db.sqlite');
+$expId = (string) ($pdoMig->query("SELECT id FROM transactions WHERE note = 'linked restock' AND itemId <> '' LIMIT 1")->fetchColumn() ?? '');
 if ($expId !== '') {
     curl("$base/transactions/delete", $cookie, 'POST', ['csrf' => $csrfT, 'id' => $expId]);
 }
@@ -418,9 +413,13 @@ else {
     // Should be admin and able to reach /users (migration promoted them).
     $u = curl("$base2/users", $cookie2);
     assertHas($u, 'legacyboss', 'migrated user present in /users (normalized to lowercase)');
-    // The legacy settings keys should have been cleared.
-    $db2 = json_decode(file_get_contents($root . '/data/db.json'), true);
-    assertHas(($db2['settings']['user'] ?? null) === null ? 'ok' : '', 'ok', 'legacy settings.user cleared after migration');
+    // The legacy settings keys should have been cleared (migrated into the users
+    // collection). A cleared setting is stored as NULL (or the JSON string
+    // 'null'), so either means the migration succeeded.
+    $pdoLegacy = new \PDO('sqlite:' . $migDir . '/db.sqlite');
+    $rawLegacyUser = $pdoLegacy->query("SELECT value FROM settings WHERE key = 'user'")->fetchColumn();
+    $legacyUser = $rawLegacyUser === false ? null : json_decode((string) $rawLegacyUser, true);
+    assertHas($legacyUser === null ? 'ok' : '', 'ok', 'legacy settings.user cleared after migration');
     proc_terminate($proc2);
 }
 // Clean up the data/ symlink (or directory) so a subsequent run starts fresh.

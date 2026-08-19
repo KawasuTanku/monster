@@ -6,8 +6,9 @@ namespace Monster;
 
 /**
  * Application wiring. Centralizes config resolution so the front controller and
- * CLI setup share the same paths. Data lives in data/db.json next to web/ so it
- * is NOT web-served (outside the document root).
+ * CLI setup share the same paths. Data lives in data/db.sqlite next to web/ so it
+ * is NOT web-served (outside the document root). A legacy db.json is imported
+ * automatically on first boot (see Storage).
  */
 final class App
 {
@@ -23,7 +24,7 @@ final class App
         if (!is_dir($dataDir)) {
             mkdir($dataDir, 0o750, true);
         }
-        $this->storage = new Storage($dataDir . '/db.json');
+        $this->storage = new Storage($dataDir . '/db.sqlite');
         $this->auth = new Auth($this->storage);
         $this->txns = new TransactionRepository($this->storage);
         $this->inv = new InventoryRepository($this->storage);

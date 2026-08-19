@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace Monster;
 
 /**
- * Backup & restore for the single-file JSON store.
+ * Backup & restore for the Monster store.
  *
- * Backups live alongside db.json in a `backups/` subdirectory (gitignored).
+ * Backups are portable JSON snapshots of the whole store (the same shape as the
+ * legacy db.json), written to a `backups/` subdirectory (gitignored) and safe to
+ * restore onto either the SQLite store or a future storage backend — Backup never
+ * touches the storage engine's internal file format.
+ *
  * Two kinds are produced:
  *   - manual snapshots:  monster-YYYYMMDD-HHMMSS.json
  *   - daily snapshots:   daily-YYYYMMDD.json (one per calendar day; overwritten
@@ -20,13 +24,14 @@ final class Backup
 {
     private const KEEP = 14; // daily snapshots retained
 
-    private string $dataFile;
+    private Storage $storage;
     private string $dir;
 
     public function __construct(Storage $storage)
     {
-        $this->dataFile = $storage->path();
-        $this->dir = dirname($this->dataFile) . '/backups';
+        $this->storage = $storage;
+        $dataDir = dirname($storage->path());
+        $this->dir = $dataDir . '/backups';
     }
 
     /** Absolute path to the backups directory. */
@@ -45,22 +50,18 @@ final class Backup
 
     /**
      * Take a full manual backup with an optional label. Returns the new file path.
-     * @throws \RuntimeException if the source file is missing or unreadable.
+     * The snapshot is a portable JSON dump of the whole store (same shape as the
+     * legacy db.json), safe to restore onto any storage backend.
+     * @throws \RuntimeException if the backup cannot be written.
      */
     public function create(string $label = ''): string
     {
-        if (!is_file($this->dataFile)) {
-            throw new \RuntimeException('Nothing to back up: ' . $this->dataFile . ' does not exist.');
-        }
-        $raw = file_get_contents($this->dataFile);
-        if ($raw === false) {
-            throw new \RuntimeException('Unable to read source store for backup.');
-        }
         $this->ensureDir();
         $stamp = date('Ymd-His');
         $name = 'monster-' . $stamp . ($label !== '' ? '-' . preg_replace('/[^A-Za-z0-9_-]/', '', $label) : '') . '.json';
         $dest = $this->dir . '/' . $name;
-        if (file_put_contents($dest, $raw, LOCK_EX) === false) {
+        $dump = json_encode($this->storage->exportDump(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if ($dump === false || file_put_contents($dest, $dump, LOCK_EX) === false) {
             throw new \RuntimeException('Unable to write backup file: ' . $dest);
         }
         return $dest;
@@ -75,10 +76,11 @@ final class Backup
         $this->ensureDir();
         $today = date('Ymd');
         $target = $this->dir . '/daily-' . $today . '.json';
-        if (!is_file($target) && is_file($this->dataFile)) {
-            $raw = @file_get_contents($this->dataFile);
-            if ($raw !== false) {
-                @file_put_contents($target, $raw, LOCK_EX);
+        if (!is_file($target)) {
+            try {
+                $this->create('daily-' . $today);
+            } catch (\Throwable) {
+                // Non-fatal: a missed daily snapshot should not break boot.
             }
         }
         $this->pruneDaily();
@@ -142,13 +144,13 @@ final class Backup
     }
 
     /**
-     * Restore db.json from a backup file. The backup must live inside our
+     * Restore the store from a backup file. The backup must live inside our
      * backups directory (so we never write an arbitrary uploaded path). The
      * content is validated as non-empty JSON before committing.
      * @throws \InvalidArgumentException if the source is invalid.
      * @throws \RuntimeException if the write fails.
      */
-    public function restore(string $backupPath): void
+    public function restore(Storage $storage, string $backupPath): void
     {
         $real = realpath($backupPath);
         $dirReal = realpath($this->dir);
@@ -156,20 +158,15 @@ final class Backup
             throw new \InvalidArgumentException('Backup file not found or outside the backups directory.');
         }
         $raw = file_get_contents($real);
-        if ($raw === false || $raw === '' || json_decode($raw, true) === null) {
+        if ($raw === false || $raw === '') {
+            throw new \InvalidArgumentException('Backup content is empty.');
+        }
+        $dump = json_decode($raw, true);
+        if (!is_array($dump)) {
             throw new \InvalidArgumentException('Backup content is not valid JSON.');
         }
         // Before clobbering, snapshot the current (about-to-be-replaced) state.
-        if (is_file($this->dataFile)) {
-            try { $this->create('pre-restore'); } catch (\Throwable) {}
-        }
-        $tmp = $this->dataFile . '.' . getmypid() . '.' . bin2hex(random_bytes(6)) . '.tmp';
-        if (file_put_contents($tmp, $raw, LOCK_EX) === false) {
-            throw new \RuntimeException('Unable to stage restore.');
-        }
-        if (!rename($tmp, $this->dataFile)) {
-            @unlink($tmp);
-            throw new \RuntimeException('Unable to commit restore.');
-        }
+        try { $this->create('pre-restore'); } catch (\Throwable) {}
+        $storage->loadDump($dump);
     }
 }

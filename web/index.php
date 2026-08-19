@@ -336,7 +336,7 @@ if (str_starts_with($uri, '/backup')) {
         if (csrfValid($_POST['csrf'] ?? null)) {
             $src = $_POST['file'] ?? '';
             try {
-                $app->backup->restore($app->backup->dir() . '/' . basename($src));
+                $app->backup->restore($app->storage, $app->backup->dir() . '/' . basename($src));
                 setFlash('Restored from ' . basename($src) . '.');
             } catch (\InvalidArgumentException | \RuntimeException $e) {
                 setFlash($e->getMessage());
