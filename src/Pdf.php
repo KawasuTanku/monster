@@ -190,12 +190,15 @@ final class Pdf
             // Label sits to the left, vertically centered on the bar row.
             $this->textAt($label, self::MARGIN, $barCenter + 3.0, 9.0);
             $barTop = $this->y - $barH;
+            $labelColRight = self::MARGIN + $labelW + 6.0; // never draw values left of this
             if ($val >= 0) {
                 $this->rect($zero, $barTop, $len, $barH, 0.20, 0.55, 0.30);
                 $vtx = $zero + $len + 4;
             } else {
                 $this->rect($zero - $len, $barTop, $len, $barH, 0.70, 0.25, 0.25);
-                $vtx = $zero - $len - 4 - $this->strWidth('$' . self::num($val), 9.0);
+                // Value goes left of the bar's left end, but clamp so it never
+                // slides back over the month label column.
+                $vtx = max($zero - $len - 4 - $this->strWidth('$' . self::num($val), 9.0), $labelColRight);
             }
             $this->textAt('$' . self::num($val), $vtx, $barCenter + 3.0, 9.0, true);
             $this->y -= ($barH + $gap);
