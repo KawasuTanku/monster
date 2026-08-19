@@ -11,17 +11,26 @@ final class InventoryRepository
 {
     private const KEY = 'inventory';
 
+    /** Cache of all() for the lifetime of this request. totalStockValue(),
+     *  lowStock(), and the /inventory + /transactions views each call all();
+     *  this collapses them into one load per request. */
+    private ?array $allCache = null;
+
     public function __construct(private Storage $storage) {}
 
     /** @return list<InventoryItem> */
     public function all(): array
     {
+        if ($this->allCache !== null) {
+            return $this->allCache;
+        }
         $out = [];
         foreach ($this->storage->getList(self::KEY) as $row) {
             $out[] = InventoryItem::fromArray($row);
         }
         // Name ascending for a stable, scannable list.
         usort($out, static fn(InventoryItem $a, InventoryItem $b): int => $a->name <=> $b->name ?: $a->variant <=> $b->variant);
+        $this->allCache = $out;
         return $out;
     }
 
@@ -35,11 +44,16 @@ final class InventoryRepository
     {
         $item->updatedAt = time();
         $this->storage->put(self::KEY, $item->toArray());
+        $this->allCache = null;
     }
 
     public function delete(string $id): bool
     {
-        return $this->storage->delete(self::KEY, $id);
+        $ok = $this->storage->delete(self::KEY, $id);
+        if ($ok) {
+            $this->allCache = null;
+        }
+        return $ok;
     }
 
     /** Items at or below their reorder threshold. @return list<InventoryItem> */

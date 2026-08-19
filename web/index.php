@@ -294,7 +294,7 @@ if ($uri === '/settings/password' && $method === 'POST') {
 
 if ($uri === '/settings/reset' && $method === 'POST') {
     if (csrfValid($_POST['csrf'] ?? null)) {
-        foreach ($app->txns->all() as $t) { $app->txns->delete($t->id); }
+        $app->txns->deleteAll();
         setFlash('All transactions deleted.');
     }
     header('Location: /settings'); exit;

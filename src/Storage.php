@@ -281,6 +281,16 @@ SQL);
         return $stmt->rowCount() > 0;
     }
 
+    /**
+     * Delete every record in a collection (used by bulk reset). A single
+     * statement, not one DELETE per row.
+     */
+    public function deleteAll(string $key): void
+    {
+        $table = $this->tableFor($key);
+        $this->pdo->exec("DELETE FROM $table");
+    }
+
     /** Read a scalar setting (stored JSON-encoded so any type round-trips). */
     public function getSetting(string $key, mixed $default = null): mixed
     {

@@ -11,11 +11,19 @@ final class TransactionRepository
 {
     private const KEY = 'transactions';
 
+    /** Cache of all() for the lifetime of this request. Collapses the many
+     *  callers (summary, categories, roiSeries, roiOverall, paged, …) that each
+     *  otherwise re-read + re-sort the full table into a single load. */
+    private ?array $allCache = null;
+
     public function __construct(private Storage $storage) {}
 
     /** @return list<Transaction> */
     public function all(): array
     {
+        if ($this->allCache !== null) {
+            return $this->allCache;
+        }
         $out = [];
         foreach ($this->storage->getList(self::KEY) as $row) {
             $out[] = Transaction::fromArray($row);
@@ -23,6 +31,7 @@ final class TransactionRepository
         // Newest first by date, then by creation time.
         usort($out, static fn(Transaction $a, Transaction $b): int =>
             $b->date <=> $a->date ?: $b->createdAt <=> $a->createdAt);
+        $this->allCache = $out;
         return $out;
     }
 
@@ -35,11 +44,23 @@ final class TransactionRepository
     public function save(Transaction $t): void
     {
         $this->storage->put(self::KEY, $t->toArray());
+        $this->allCache = null;
     }
 
     public function delete(string $id): bool
     {
-        return $this->storage->delete(self::KEY, $id);
+        $ok = $this->storage->delete(self::KEY, $id);
+        if ($ok) {
+            $this->allCache = null;
+        }
+        return $ok;
+    }
+
+    /** Remove every transaction (settings reset). One statement, not N. */
+    public function deleteAll(): void
+    {
+        $this->storage->deleteAll(self::KEY);
+        $this->allCache = null;
     }
 
     /**
