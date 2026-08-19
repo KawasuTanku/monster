@@ -185,12 +185,13 @@ final class Pdf
             $label = $s['label'];
             $val = $s['cumNet'];
             $len = ($plotW / 2) * (abs($val) / $max);
-            // The cursor is the text baseline for this row. Draw the bar
-            // directly ABOVE the text with a tiny gap so the bar reads as
-            // "lifted" but stays tightly paired to its label/value (not
-            // floating disconnected).
-            $barBottom = $this->y + 6.0;
-            $barTop = $barBottom + $barH;
+            // The cursor ($this->y) is the text baseline for this row. Center
+            // the bar on the text band with a slight upward lift so it reads
+            // "up a bit" yet stays clearly inside its own row — drawing the
+            // bar fully above the text made it look shifted up a row above its
+            // label.
+            $barCenter = $this->y + 4.0;
+            $barTop = $barCenter - $barH / 2;
             // Label sits to the left, baseline-aligned with the value text.
             $this->textAt($label, self::MARGIN, $this->y, 9.0);
             $labelColRight = self::MARGIN + $labelW + 6.0; // never draw values left of this
