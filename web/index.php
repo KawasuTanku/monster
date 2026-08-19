@@ -23,6 +23,9 @@ require __DIR__ . '/../vendor/autoload.php';
 $app = new App(__DIR__ . '/..');
 $GLOBALS['app'] = $app;
 
+// Hardened security headers on every response (HSTS, nosniff, frame-deny, CSP…).
+\Monster\securityHeaders();
+
 // Resolve route from the original request URI (FrankenPHP php_server rewrites here).
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');

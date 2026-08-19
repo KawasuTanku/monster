@@ -26,6 +26,13 @@ final class Auth
     private const COST = 13;
     private const USERS_KEY = 'users';
 
+    // Session lifetime: an absolute cap and a sliding idle window. Either expiry
+    // logs the operator out (they just sign back in — no destructive action).
+    private const SESSION_ABSOLUTE = 28800; // 8h hard cap from login
+    private const SESSION_IDLE = 1800;      // 30m of inactivity before logout
+    private const TS_LOGIN = 'monster_login';
+    private const TS_LAST = 'monster_last';
+
     public function __construct(private Storage $storage) {}
 
     /**
@@ -322,6 +329,8 @@ final class Auth
         $this->startSession();
         session_regenerate_id(true);
         $_SESSION[self::SESSION_KEY] = $username;
+        $_SESSION[self::TS_LOGIN] = time();
+        $_SESSION[self::TS_LAST] = time();
         return true;
     }
 
@@ -335,7 +344,22 @@ final class Auth
     public function check(): bool
     {
         $this->startSession();
-        return isset($_SESSION[self::SESSION_KEY]);
+        if (!isset($_SESSION[self::SESSION_KEY])) {
+            return false;
+        }
+        $now = time();
+        $login = (int) ($_SESSION[self::TS_LOGIN] ?? 0);
+        $last = (int) ($_SESSION[self::TS_LAST] ?? 0);
+        // Either the absolute cap (since login) or the idle window (since last
+        // activity) has elapsed -> expire the session and force re-auth.
+        if (($login > 0 && $now - $login > self::SESSION_ABSOLUTE)
+            || ($last > 0 && $now - $last > self::SESSION_IDLE)) {
+            unset($_SESSION[self::SESSION_KEY], $_SESSION[self::TS_LOGIN], $_SESSION[self::TS_LAST]);
+            return false;
+        }
+        // Sliding idle window: bump "last activity" on each authenticated request.
+        $_SESSION[self::TS_LAST] = $now;
+        return true;
     }
 
     public function user(): ?string

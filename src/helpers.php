@@ -94,6 +94,27 @@ function keyIcon(): string
 }
 
 /**
+ * Emit hardened security headers for a login-protected app. Idempotent: a no-op
+ * once headers have already been sent. Tuned to be safe with the app's own inline
+ * scripts/styles (script-src/style-src allow 'unsafe-inline' so we don't have to
+ * refactor every view) while blocking cross-origin script/style loads — the
+ * realistic XSS vector here — and clickjacking/framing.
+ */
+function securityHeaders(): void
+{
+    if (headers_sent()) {
+        return;
+    }
+    header('Strict-Transport-Security: max-age=31536000');
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: DENY');
+    header('Referrer-Policy: no-referrer');
+    header("Content-Security-Policy: default-src 'self'; "
+        . "script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+        . "img-src 'self' data:; object-src 'none'; base-uri 'self'");
+}
+
+/**
  * Inline trash-can icon for delete affordances. Solid black fill so it renders
  * reliably on the dark theme. @return string */
 function trashIcon(): string
