@@ -75,6 +75,23 @@ final class InventoryItem
     }
 
     /**
+     * Weighted-average unit cost after receiving `addQty` cans at `addUnitCost`,
+     * blended with the current on-hand lot. Returns the new per-can cost.
+     * Pure: does not mutate $this.
+     */
+    public function averageCost(float $addQty, float $addUnitCost): float
+    {
+        $addQty = max(0.0, $addQty);
+        if ($addQty <= 0.0) {
+            return $this->unitCost;
+        }
+        $oldValue = $this->qtyOnHand * $this->unitCost;
+        $newValue = $oldValue + ($addQty * $addUnitCost);
+        $newQty = $this->qtyOnHand + $addQty;
+        return $newQty > 0 ? round($newValue / $newQty, 4) : $addUnitCost;
+    }
+
+    /**
      * Units to order to bring stock back up to (and a little above) the reorder
      * threshold. Returns 0 when the item isn't flagged low. Suggests topping up
      * to double the threshold so a single restock covers near-term demand.

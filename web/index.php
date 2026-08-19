@@ -192,6 +192,15 @@ if ($uri === '/transactions/save' && $method === 'POST') {
                 if ($t->type === Transaction::TYPE_SALE) {
                     $item->qtyOnHand = max(0, $item->qtyOnHand - $delta);
                 } elseif ($t->type === Transaction::TYPE_EXPENSE) {
+                    // A linked expense is a restock purchase: the per-can cost
+                    // of this batch is the total amount spread over its qty,
+                    // blended into unitCost as a weighted average. Compute the
+                    // average BEFORE incrementing qtyOnHand so the new units
+                    // aren't counted twice.
+                    if ($delta > 0) {
+                        $batchCost = $linkedQty > 0 ? round($t->amount / $linkedQty, 4) : $t->amount;
+                        $item->unitCost = $item->averageCost((float) $delta, $batchCost);
+                    }
                     $item->qtyOnHand += $delta;
                 }
                 if ($delta !== 0) {
@@ -593,10 +602,15 @@ if ($uri === '/inventory/restock' && $method === 'POST') {
         $item = $app->inv->find($_POST['id'] ?? '');
         $qty = max(0, (int) ($_POST['qty'] ?? 0));
         if ($item !== null && $qty > 0) {
+            // Per-can cost for THIS batch; defaults to the item's current
+            // unitCost so a plain restock keeps the existing cost when no
+            // price is supplied. Weighted-average the new lot into unitCost.
+            $batchCost = (float) ($_POST['cost'] ?? $item->unitCost);
+            $item->unitCost = $item->averageCost((float) $qty, $batchCost);
             $item->qtyOnHand += $qty;
             $app->inv->save($item);
             // Auto-post the cost of goods as a COGS expense linked to this item.
-            $cost = round($item->unitCost * $qty, 2);
+            $cost = round($batchCost * $qty, 2);
             $t = new Transaction();
             $t->id = bin2hex(random_bytes(12));
             $t->type = Transaction::TYPE_EXPENSE;

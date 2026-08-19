@@ -96,6 +96,7 @@ use function Monster\moneyClass;
                         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
                         <input type="hidden" name="id" value="<?= e($i->id) ?>">
                         <input type="number" min="1" step="1" name="qty" value="12" class="qty" title="Restock quantity">
+                        <input type="number" min="0" step="0.01" name="cost" value="<?= money($i->unitCost) ?>" class="cost" title="Cost per can for this restock (defaults to current cost)">
                         <button type="submit" class="link" title="Restock & log cost">restock</button>
                     </form>
                     <form method="post" action="/inventory/delete" class="inline">

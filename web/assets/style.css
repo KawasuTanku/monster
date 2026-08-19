@@ -96,6 +96,7 @@ input, select {
 }
 input:focus, select:focus { outline: none; border-color: var(--accent); }
 .qty { width: 4rem; }
+.cost { width: 5rem; }
 button {
     background: var(--accent); color: #06210f; border: none; border-radius: 6px;
     padding: 0.55rem 1rem; font-weight: 600; cursor: pointer; font-size: 0.95rem;
