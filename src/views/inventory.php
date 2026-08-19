@@ -64,7 +64,7 @@ use function Monster\moneyClass;
 <?php else: ?>
     <div class="table-wrap">
     <table class="table">
-        <thead><tr><th>Name</th><th>Variant</th><th class="num">Qty</th><th class="num">Cost</th><th class="num">Price</th><th class="num">Stock $</th><th class="num">Revenue</th><th class="num">COGS</th><th class="num">Profit</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Variant</th><th class="num">Qty</th><th class="num">Cost</th><th class="num">Price</th><th class="num">Stock $</th><th class="num">Revenue</th><th class="num">COGS</th><th class="num">Profit</th><th class="num">Restock Qty</th><th class="num">Restock Cost</th><th></th></tr></thead>
         <tbody>
         <?php foreach ($items as $i): ?>
             <tr<?= $i->isLow() ? ' class="low"' : '' ?>>
@@ -95,12 +95,8 @@ use function Monster\moneyClass;
                     <form method="post" action="/inventory/restock" class="inline restock">
                         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
                         <input type="hidden" name="id" value="<?= e($i->id) ?>">
-                        <label class="inline-field">Qty
-                            <input type="number" min="1" step="1" name="qty" value="12" class="qty" title="Restock quantity">
-                        </label>
-                        <label class="inline-field">Cost/ea
-                            <input type="number" min="0" step="0.01" name="cost" value="<?= money($i->unitCost) ?>" class="cost" title="Cost per can for this restock (defaults to current cost)">
-                        </label>
+                        <input type="number" min="1" step="1" name="qty" value="12" class="qty" title="Restock quantity" aria-label="Restock quantity">
+                        <input type="number" min="0" step="0.01" name="cost" value="<?= money($i->unitCost) ?>" class="cost" title="Cost per can for this restock (defaults to current cost)" aria-label="Restock cost per can">
                         <button type="submit" class="link" title="Restock & log cost">restock</button>
                     </form>
                     <form method="post" action="/inventory/delete" class="inline">
