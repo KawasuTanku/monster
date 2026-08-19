@@ -71,6 +71,75 @@ final class TransactionRepository
         }));
     }
 
+    /**
+     * Case-insensitive substring search across note and category.
+     * @return list<Transaction>
+     */
+    public function search(string $q): array
+    {
+        $q = trim($q);
+        if ($q === '') {
+            return $this->all();
+        }
+        $q = strtolower($q);
+        return array_values(array_filter($this->all(), static function (Transaction $t) use ($q): bool {
+            return str_contains(strtolower($t->note), $q)
+                || str_contains(strtolower($t->category), $q);
+        }));
+    }
+
+    /**
+     * Filtered + paginated transactions for the transactions list.
+     *
+     * @param array{type?: string, category?: string, from?: string, to?: string, q?: string, page?: int, perPage?: int} $opts
+     * @return array{items: list<Transaction>, total: int, page: int, perPage: int, pages: int}
+     */
+    public function paged(array $opts = []): array
+    {
+        $type = $opts['type'] ?? 'all';
+        $category = trim($opts['category'] ?? '');
+        $from = trim($opts['from'] ?? '');
+        $to = trim($opts['to'] ?? '');
+        $q = trim($opts['q'] ?? '');
+
+        $rows = $this->all();
+        $rows = array_values(array_filter($rows, static function (Transaction $t) use ($type, $category, $from, $to, $q): bool {
+            if ($type !== 'all' && $t->type !== $type) {
+                return false;
+            }
+            if ($category !== '' && $t->category !== $category) {
+                return false;
+            }
+            if ($from !== '' && $t->date < $from) {
+                return false;
+            }
+            if ($to !== '' && $t->date > $to) {
+                return false;
+            }
+            if ($q !== '') {
+                $needle = strtolower($q);
+                if (!str_contains(strtolower($t->note), $needle)
+                    && !str_contains(strtolower($t->category), $needle)) {
+                    return false;
+                }
+            }
+            return true;
+        }));
+
+        $total = count($rows);
+        $perPage = max(1, (int) ($opts['perPage'] ?? 25));
+        $pages = max(1, (int) ceil($total / $perPage));
+        $page = max(1, min((int) ($opts['page'] ?? 1), $pages));
+        $offset = ($page - 1) * $perPage;
+        return [
+            'items' => array_slice($rows, $offset, $perPage),
+            'total' => $total,
+            'page' => $page,
+            'perPage' => $perPage,
+            'pages' => $pages,
+        ];
+    }
+
     /** Distinct, sorted category names across all transactions. @return list<string> */
     public function categories(): array
     {

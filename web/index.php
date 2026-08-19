@@ -90,8 +90,21 @@ if ($uri === '/transactions') {
     if (isset($_GET['edit'])) {
         $edit = $app->txns->find($_GET['edit']);
     }
+    $filters = [
+        'type' => $_GET['type'] ?? 'all',
+        'category' => $_GET['category'] ?? '',
+        'from' => $_GET['from'] ?? '',
+        'to' => $_GET['to'] ?? '',
+        'q' => trim($_GET['q'] ?? ''),
+        'page' => max(1, (int) ($_GET['page'] ?? 1)),
+    ];
+    $paged = $app->txns->paged($filters);
     $items = $app->inv->all();
-    return view('transactions', ['title' => 'Transactions', 'user' => $user, 'txns' => $app->txns->all(), 'edit' => $edit, 'items' => $items]);
+    return view('transactions', [
+        'title' => 'Transactions', 'user' => $user,
+        'txns' => $paged['items'], 'edit' => $edit, 'items' => $items,
+        'filters' => $filters, 'pager' => $paged,
+    ]);
 }
 
 if ($uri === '/transactions/save' && $method === 'POST') {
@@ -183,6 +196,7 @@ if ($uri === '/report/export' && $method === 'GET') {
         'category' => $_GET['category'] ?? '',
         'from' => $_GET['from'] ?? '',
         'to' => $_GET['to'] ?? '',
+        'q' => trim($_GET['q'] ?? ''),
     ];
     $txns = $app->txns->filtered($filters);
     // Stream a CSV of the currently filtered set.

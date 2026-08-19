@@ -113,6 +113,13 @@ curl("$base/transactions/save", $cookie, 'POST', [
     'date' => '2026-08-12', 'category' => 'Wholesale', 'note' => 'cases',
 ]);
 
+// 4b) REGRESSION: search filters the transactions list (Tier 2 step 1).
+$searchHit = curl("$base/transactions?q=" . urlencode('farmer'), $cookie);
+assertHas($searchHit, 'farmer market', 'search finds matching note');
+assertMissing($searchHit, 'cases', 'search excludes non-matching note');
+$searchMiss = curl("$base/transactions?q=" . urlencode('zzzznomatch'), $cookie);
+assertHas($searchMiss, 'No transactions recorded yet', 'empty search result shows empty state');
+
 // 5) Dashboard shows correct net ($250.00 - $90.50 = $159.50).
 $dash = curl("$base/dashboard", $cookie);
 assertHas($dash, '$250.00', 'dashboard shows revenue 250.00');
@@ -252,12 +259,13 @@ if (preg_match('/href="\/backup\/download\?file=([^"]+)"/', $backupPage2, $m2)) 
     assertHas($after, 'Restored from', 'restore reports success');
 }
 // 12d-2) REGRESSION: admin can delete a backup.
-// Create a backup, take the newest one from the list, delete it, confirm it's gone.
+// Create a backup, take the NEWEST one from the list (first = newest mtime),
+// delete it, confirm it's gone. (The daily snapshot is oldest, so avoid end().)
 curl("$base/backup/create", $cookie, 'POST', ['csrf' => $csrfBk]);
 $listNow = curl("$base/backup", $cookie);
 preg_match_all('/href="\/backup\/download\?file=([^"]+)"/', $listNow, $mNow);
 $names = $mNow[1] ?? [];
-$toDelete = rawurldecode(end($names) ?: '');
+$toDelete = rawurldecode(reset($names) ?: '');
 if ($toDelete !== '') {
     $delResp = curl("$base/backup/delete", $cookie, 'POST', ['csrf' => $csrfBk, 'file' => $toDelete]);
     assertHas($delResp, 'Deleted backup', 'admin can delete a backup');

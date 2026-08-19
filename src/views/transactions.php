@@ -3,6 +3,8 @@ declare(strict_types=1);
 /** @var list<\Monster\Transaction> $txns */
 /** @var \Monster\Transaction|null $edit */
 /** @var list<\Monster\InventoryItem> $items */
+/** @var array{type?: string, category?: string, from?: string, to?: string, q?: string, page?: int} $filters */
+/** @var array{items: list<\Monster\Transaction>, total: int, page: int, perPage: int, pages: int} $pager */
 use function Monster\e;
 use function Monster\money;
 use function Monster\moneyClass;
@@ -93,6 +95,24 @@ use function Monster\trashIcon;
 })();
 </script>
 
+<?php
+$base = '/transactions?' . http_build_query(array_filter([
+    'type' => $filters['type'] ?? 'all',
+    'category' => $filters['category'] ?? '',
+    'from' => $filters['from'] ?? '',
+    'to' => $filters['to'] ?? '',
+], static fn($v) => $v !== '' && $v !== 'all'));
+?>
+<form method="get" action="/transactions" class="filter-bar">
+    <input type="text" name="q" value="<?= e($filters['q'] ?? '') ?>" placeholder="Search note or category…" aria-label="Search transactions">
+    <input type="hidden" name="type" value="<?= e($filters['type'] ?? 'all') ?>">
+    <input type="hidden" name="category" value="<?= e($filters['category'] ?? '') ?>">
+    <input type="hidden" name="from" value="<?= e($filters['from'] ?? '') ?>">
+    <input type="hidden" name="to" value="<?= e($filters['to'] ?? '') ?>">
+    <button type="submit">Search</button>
+    <?php if (($filters['q'] ?? '') !== ''): ?><a class="link" href="<?= e($base) ?>">Clear</a><?php endif; ?>
+</form>
+
 <?php if (empty($txns)): ?>
     <p class="muted">No transactions recorded yet.</p>
 <?php else: ?>
@@ -119,4 +139,28 @@ use function Monster\trashIcon;
         <?php endforeach; ?>
         </tbody>
     </table>
+<?php
+// Pagination footer: build page links that preserve the current filters + search.
+$qs = static function (int $p) use ($filters): string {
+    $params = array_filter([
+        'type' => $filters['type'] ?? 'all',
+        'category' => $filters['category'] ?? '',
+        'from' => $filters['from'] ?? '',
+        'to' => $filters['to'] ?? '',
+        'q' => $filters['q'] ?? '',
+        'page' => $p > 1 ? $p : null,
+    ], static fn($v) => $v !== '' && $v !== null && $v !== 'all');
+    $q = http_build_query($params);
+    return $q === '' ? '/transactions' : '/transactions?' . $q;
+};
+?>
+<div class="pager">
+    <span class="muted"><?= e((string) $pager['total']) ?> entr<?= $pager['total'] === 1 ? 'y' : 'ies' ?><?= $pager['pages'] > 1 ? ' · page ' . $pager['page'] . ' of ' . $pager['pages'] : '' ?></span>
+    <?php if ($pager['pages'] > 1): ?>
+        <span class="pager-nav">
+            <?php if ($pager['page'] > 1): ?><a class="link" href="<?= e($qs($pager['page'] - 1)) ?>">← Prev</a><?php endif; ?>
+            <?php if ($pager['page'] < $pager['pages']): ?><a class="link" href="<?= e($qs($pager['page'] + 1)) ?>">Next →</a><?php endif; ?>
+        </span>
+    <?php endif; ?>
+</div>
 <?php endif; ?>
