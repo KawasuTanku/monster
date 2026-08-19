@@ -169,4 +169,19 @@ final class Backup
         try { $this->create('pre-restore'); } catch (\Throwable) {}
         $storage->loadDump($dump);
     }
+
+    /**
+     * Delete a backup file. The backup must live inside our backups directory
+     * (so we never unlink an arbitrary path). Returns true if a file was removed.
+     * @throws \InvalidArgumentException if the target is invalid or outside the directory.
+     */
+    public function delete(string $name): bool
+    {
+        $real = realpath($this->dir . '/' . basename($name));
+        $dirReal = realpath($this->dir);
+        if ($real === false || $dirReal === false || !str_starts_with($real, $dirReal . '/') || !is_file($real)) {
+            throw new \InvalidArgumentException('Backup file not found or outside the backups directory.');
+        }
+        return @unlink($real);
+    }
 }

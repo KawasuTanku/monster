@@ -32,6 +32,11 @@ use function Monster\money;
                     <input type="hidden" name="file" value="<?= e($b['name']) ?>">
                     <button type="submit" class="link" onclick="return confirm('Restore from <?= e($b['name']) ?>? Current data will be snapshotted first.')">restore</button>
                 </form>
+                <form method="post" action="/backup/delete" class="inline">
+                    <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
+                    <input type="hidden" name="file" value="<?= e($b['name']) ?>">
+                    <button type="submit" class="link danger" onclick="return confirm('Delete backup <?= e($b['name']) ?>? This cannot be undone.')">delete</button>
+                </form>
             </td>
         </tr>
     <?php endforeach; ?>

@@ -344,6 +344,18 @@ if (str_starts_with($uri, '/backup')) {
         }
         header('Location: /backup'); exit;
     }
+    if ($uri === '/backup/delete' && $method === 'POST') {
+        if (csrfValid($_POST['csrf'] ?? null)) {
+            $name = basename($_POST['file'] ?? '');
+            try {
+                $app->backup->delete($name);
+                setFlash('Deleted backup ' . $name . '.');
+            } catch (\InvalidArgumentException $e) {
+                setFlash($e->getMessage());
+            }
+        }
+        header('Location: /backup'); exit;
+    }
 }
 
 // ---- Inventory (all authenticated users) ----

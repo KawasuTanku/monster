@@ -251,6 +251,19 @@ if (preg_match('/href="\/backup\/download\?file=([^"]+)"/', $backupPage2, $m2)) 
     $after = curl("$base/backup/restore", $cookie, 'POST', ['csrf' => $csrfBk, 'file' => $fname]);
     assertHas($after, 'Restored from', 'restore reports success');
 }
+// 12d-2) REGRESSION: admin can delete a backup.
+// Create a backup, take the newest one from the list, delete it, confirm it's gone.
+curl("$base/backup/create", $cookie, 'POST', ['csrf' => $csrfBk]);
+$listNow = curl("$base/backup", $cookie);
+preg_match_all('/href="\/backup\/download\?file=([^"]+)"/', $listNow, $mNow);
+$names = $mNow[1] ?? [];
+$toDelete = rawurldecode(end($names) ?: '');
+if ($toDelete !== '') {
+    $delResp = curl("$base/backup/delete", $cookie, 'POST', ['csrf' => $csrfBk, 'file' => $toDelete]);
+    assertHas($delResp, 'Deleted backup', 'admin can delete a backup');
+    $afterDelete = curl("$base/backup", $cookie);
+    assertMissing($afterDelete, rawurlencode($toDelete), 'deleted backup no longer listed');
+}
 
 // 12e) REGRESSION: inventory add / adjust / low-stock / restock->COGS / linked sale / delete.
 $invPage = curl("$base/inventory", $cookie);
