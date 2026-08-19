@@ -22,7 +22,9 @@ final class App
     {
         $dataDir = rtrim($baseDir, '/') . '/data';
         if (!is_dir($dataDir)) {
-            mkdir($dataDir, 0o750, true);
+            // @ suppresses a benign race when multiple worker processes boot at
+            // once and both try to create it (the loser just sees it already exist).
+            @mkdir($dataDir, 0o750, true);
         }
         $this->storage = new Storage($dataDir . '/db.sqlite');
         $this->auth = new Auth($this->storage);

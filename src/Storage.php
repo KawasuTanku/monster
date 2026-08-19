@@ -36,7 +36,29 @@ final class Storage
         $this->pdo = new \PDO('sqlite:' . $file);
         $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         $this->pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
-        $this->pdo->exec('PRAGMA journal_mode=WAL');
+        // busy_timeout makes SQLite *wait* under contention instead of immediately
+        // throwing "database is locked" — essential when multiple FrankenPHP worker
+        // processes open the same file concurrently (worker mode) or when a backup/
+        // restore holds a write lock. 5s is plenty for this app's tiny transactions.
+        $this->pdo->exec('PRAGMA busy_timeout=5000');
+        // WAL allows concurrent readers + a single writer and survives crashes.
+        // Applying it at boot can race when several worker processes start at once
+        // (each grabbing a write lock on the same file), so retry a few times with a
+        // short backoff instead of failing hard. If it truly can't be applied we
+        // proceed anyway — the app still works in the default rollback journal mode.
+        $applied = false;
+        for ($i = 0; $i < 10 && !$applied; $i++) {
+            try {
+                $this->pdo->exec('PRAGMA journal_mode=WAL');
+                $applied = true;
+            } catch (\PDOException $e) {
+                if (str_contains($e->getMessage(), 'database is locked')) {
+                    usleep(50_000); // 50ms
+                    continue;
+                }
+                throw $e;
+            }
+        }
         $this->ensureSchema();
     }
 

@@ -64,6 +64,16 @@ final class TransactionRepository
     }
 
     /**
+     * Drop any cached all() result. In FrankenPHP worker mode the repo instance
+     * lives across requests, so the per-request cache must be cleared before each
+     * new request re-reads the store. No-op in traditional (per-request) mode.
+     */
+    public function clearCache(): void
+    {
+        $this->allCache = null;
+    }
+
+    /**
      * All transactions, optionally filtered.
      * @param array{type?: string, category?: string, from?: string, to?: string} $filters
      * @return list<Transaction>

@@ -44,7 +44,8 @@ final class Backup
     private function ensureDir(): void
     {
         if (!is_dir($this->dir)) {
-            mkdir($this->dir, 0o750, true);
+            // @ suppresses a benign race when multiple workers ensure it at once.
+            @mkdir($this->dir, 0o750, true);
         }
     }
 

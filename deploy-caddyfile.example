@@ -1,7 +1,16 @@
 {
 	http_port 8080
 	https_port 8443
-	frankenphp
+	frankenphp {
+		# Worker mode: boot the PHP app once and reuse it (and its SQLite
+		# connection + opcache) across requests instead of re-booting per hit.
+		# The app front controller (web/index.php) detects frankenphp_handle_request
+		# and runs a request loop rather than exiting. Adjust the count to taste.
+		worker {
+			file web/index.php
+			num 2
+		}
+	}
 	order php_server before file_server
 }
 

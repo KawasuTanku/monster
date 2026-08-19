@@ -11,21 +11,26 @@ use Monster\Transaction;
 use Monster\TransactionRepository;
 use Monster\InventoryItem;
 
-// Hardened session cookie defaults. MUST be set before the first session_start()
-// (which happens the moment a view calls csrfToken()/takeFlash(), often while
-// rendering a form) — otherwise the session is created with PHP's insecure
-// defaults (no HttpOnly, no Secure, no SameSite). Computing 'secure' from the
-// request mirrors Auth::startSession() but runs early so every session benefits.
+// Session persistence. In FrankenPHP worker mode the default (per-process in-memory)
+// session handler does NOT survive across requests — a session written by one worker
+// is invisible to the next request. Route sessions to a shared, on-disk files handler
+// at a writable path so login state is consistent regardless of which worker serves
+// a request. Harmless in traditional (per-request) SAPIs too.
 if (session_status() === PHP_SESSION_NONE) {
-    $secure = (!empty($_SERVER['HTTPS']) || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-    session_set_cookie_params([
-        'lifetime' => 0,
-        'path' => '/',
-        'secure' => $secure,
-        'httponly' => true,
-        'samesite' => 'Lax',
-    ]);
+    $sessDir = __DIR__ . '/../data/sessions';
+    if (!is_dir($sessDir)) {
+        @mkdir($sessDir, 0o750, true);
+    }
+    if (is_dir($sessDir) && is_writable($sessDir)) {
+        session_save_path($sessDir);
+        // 'files' is the safe, dependency-free shared handler; Redis/etc. would need ext.
+        ini_set('session.save_handler', 'files');
+    }
 }
+
+// Hardened session cookie defaults are applied per request inside handle_request()
+// (not here) because in FrankenPHP worker mode $_SERVER is populated per request;
+// setting them once at boot would pin the 'secure' flag to the first request.
 use Monster\InventoryRepository;
 use function Monster\e;
 use function Monster\csrfToken;
@@ -39,8 +44,38 @@ require __DIR__ . '/../vendor/autoload.php';
 $app = new App(__DIR__ . '/..');
 $GLOBALS['app'] = $app;
 
+/**
+ * Handle a single HTTP request. In traditional (per-request) SAPIs this runs
+ * once per hit; in FrankenPHP worker mode the app boots once and this is called
+ * once per request, reusing the same $app (and its SQLite PDO connection).
+ */
+function handle_request(\Monster\App $app)
+{
+// Hardened session cookie defaults. MUST run before the first session_start()
+// within a request (which happens the moment a view calls csrfToken()/takeFlash(),
+// often while rendering a form) — otherwise the session is created with PHP's
+// insecure defaults. Computing 'secure' from the request mirrors
+// Auth::startSession() but runs early so every session benefits. Per-request (not
+// boot) so worker mode picks up the correct $_SERVER each hit.
+if (session_status() === PHP_SESSION_NONE) {
+    $secure = (!empty($_SERVER['HTTPS']) || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'secure' => $secure,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+}
+
 // Hardened security headers on every response (HSTS, nosniff, frame-deny, CSP…).
 \Monster\securityHeaders();
+
+// Per-request cache reset. The repositories memoize all() for the request
+// lifetime; in worker mode the same instance spans requests, so clear it here
+// to avoid serving store state written by a preceding request.
+$app->txns->clearCache();
+$app->inv->clearCache();
 
 // Resolve route from the original request URI (FrankenPHP php_server rewrites here).
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
@@ -57,13 +92,13 @@ if ($uri === '/setup' && !$app->auth->isConfigured()) {
         $app->auth->createUser($user, $pass, Auth::ROLE_ADMIN); // first user = admin
         $app->auth->login($user, $pass);
         header('Location: /dashboard');
-        exit;
+        return;
     }
     return view('login', ['title' => 'Set up', 'setup' => true]);
 }
 
 if ($uri === '/login') {
-    if ($app->auth->check()) { header('Location: /dashboard'); exit; }
+    if ($app->auth->check()) { header('Location: /dashboard'); return; }
     if ($method === 'POST') {
         $u = trim($_POST['user'] ?? '');
         $locked = $app->auth->isLocked($u);
@@ -72,7 +107,7 @@ if ($uri === '/login') {
             return view('login', ['title' => 'Sign in', 'error' => $msg, 'setup' => false]);
         }
         if ($app->auth->login($u, $_POST['pass'] ?? '')) {
-            header('Location: /dashboard'); exit;
+            header('Location: /dashboard'); return;
         }
         return view('login', ['title' => 'Sign in', 'error' => 'Invalid credentials.', 'setup' => false]);
     }
@@ -81,12 +116,12 @@ if ($uri === '/login') {
 
 if ($uri === '/logout' && $method === 'POST') {
     $app->auth->logout();
-    header('Location: /login'); exit;
+    header('Location: /login'); return;
 }
 
 // ---- Guard everything else ----
 if (!$app->auth->check()) {
-    if ($uri === '/') { header('Location: /login'); exit; }
+    if ($uri === '/') { header('Location: /login'); return; }
     http_response_code(401);
     return view('login', ['title' => 'Sign in', 'setup' => $app->auth->isConfigured() === false]);
 }
@@ -162,7 +197,7 @@ if ($uri === '/transactions/save' && $method === 'POST') {
 
     $app->txns->save($t);
     setFlash('Saved.');
-    header('Location: /transactions'); exit;
+    header('Location: /transactions'); return;
 }
 
 if ($uri === '/transactions/delete' && $method === 'POST') {
@@ -185,7 +220,7 @@ if ($uri === '/transactions/delete' && $method === 'POST') {
         $app->txns->delete($_POST['id'] ?? '');
         setFlash('Deleted.');
     }
-    header('Location: /transactions'); exit;
+    header('Location: /transactions'); return;
 }
 
 if ($uri === '/transactions/duplicate' && $method === 'POST') {
@@ -209,7 +244,7 @@ if ($uri === '/transactions/duplicate' && $method === 'POST') {
             setFlash('Duplicated as a new entry.');
         }
     }
-    header('Location: /transactions'); exit;
+    header('Location: /transactions'); return;
 }
 
 if ($uri === '/report') {
@@ -272,7 +307,7 @@ if ($uri === '/report/export' && $method === 'GET') {
         }
         fclose($out);
     }
-    exit;
+    return;
 }
 
 if ($uri === '/settings') {
@@ -289,7 +324,7 @@ if ($uri === '/settings/password' && $method === 'POST') {
         $app->auth->setPassword($user, $_POST['pass']);
         setFlash('Password changed.');
     }
-    header('Location: /settings'); exit;
+    header('Location: /settings'); return;
 }
 
 if ($uri === '/settings/reset' && $method === 'POST') {
@@ -297,11 +332,11 @@ if ($uri === '/settings/reset' && $method === 'POST') {
         $app->txns->deleteAll();
         setFlash('All transactions deleted.');
     }
-    header('Location: /settings'); exit;
+    header('Location: /settings'); return;
 }
 
 if ($uri === '/settings/budgets' && $method === 'POST') {
-    if (!$isAdmin) { http_response_code(403); header('Location: /settings'); exit; }
+    if (!$isAdmin) { http_response_code(403); header('Location: /settings'); return; }
     if (csrfValid($_POST['csrf'] ?? null)) {
         // Build a map of category => monthly budget from the submitted rows.
         $map = [];
@@ -317,7 +352,7 @@ if ($uri === '/settings/budgets' && $method === 'POST') {
         $app->storage->setSetting('budgets', $map);
         setFlash('Budgets saved.');
     }
-    header('Location: /settings'); exit;
+    header('Location: /settings'); return;
 }
 
 // ---- Admin-only: user management ----
@@ -326,7 +361,7 @@ if (str_starts_with($uri, '/users')) {
         http_response_code(403);
         echo "<!doctype html><html><head><meta charset=\"utf-8\"><title>Forbidden</title></head>"
             . "<body><h1>403 Forbidden</h1><p>Admin access required.</p></body></html>";
-        exit;
+        return;
     }
     if ($uri === '/users' && $method === 'GET') {
         return view('users', [
@@ -347,7 +382,7 @@ if (str_starts_with($uri, '/users')) {
                 setFlash($e->getMessage());
             }
         }
-        header('Location: /users'); exit;
+        header('Location: /users'); return;
     }
     if ($uri === '/users/role' && $method === 'POST') {
         if (csrfValid($_POST['csrf'] ?? null)) {
@@ -358,7 +393,7 @@ if (str_starts_with($uri, '/users')) {
                 setFlash($e->getMessage());
             }
         }
-        header('Location: /users'); exit;
+        header('Location: /users'); return;
     }
     if ($uri === '/users/delete' && $method === 'POST') {
         if (csrfValid($_POST['csrf'] ?? null) && ($_POST['user'] ?? '') !== $user) {
@@ -369,7 +404,7 @@ if (str_starts_with($uri, '/users')) {
                 setFlash($e->getMessage());
             }
         }
-        header('Location: /users'); exit;
+        header('Location: /users'); return;
     }
     if ($uri === '/users/reset' && $method === 'POST') {
         if (csrfValid($_POST['csrf'] ?? null) && ($_POST['user'] ?? '') !== $user) {
@@ -380,7 +415,7 @@ if (str_starts_with($uri, '/users')) {
                 setFlash($e->getMessage());
             }
         }
-        header('Location: /users'); exit;
+        header('Location: /users'); return;
     }
 }
 
@@ -390,7 +425,7 @@ if (str_starts_with($uri, '/backup')) {
         http_response_code(403);
         echo "<!doctype html><html><head><meta charset=\"utf-8\"><title>Forbidden</title></head>"
             . "<body><h1>403 Forbidden</h1><p>Admin access required.</p></body></html>";
-        exit;
+        return;
     }
     if ($uri === '/backup' && $method === 'GET') {
         return view('backup', [
@@ -408,12 +443,12 @@ if (str_starts_with($uri, '/backup')) {
         if ($path === null || !is_file($path)) {
             http_response_code(404);
             echo 'No backup available.';
-            exit;
+            return;
         }
         header('Content-Type: application/json');
         header('Content-Disposition: attachment; filename="' . basename($path) . '"');
         readfile($path);
-        exit;
+        return;
     }
     if ($uri === '/backup/create' && $method === 'POST') {
         if (csrfValid($_POST['csrf'] ?? null)) {
@@ -424,7 +459,7 @@ if (str_starts_with($uri, '/backup')) {
                 setFlash($e->getMessage());
             }
         }
-        header('Location: /backup'); exit;
+        header('Location: /backup'); return;
     }
     if ($uri === '/backup/restore' && $method === 'POST') {
         if (csrfValid($_POST['csrf'] ?? null)) {
@@ -436,7 +471,7 @@ if (str_starts_with($uri, '/backup')) {
                 setFlash($e->getMessage());
             }
         }
-        header('Location: /backup'); exit;
+        header('Location: /backup'); return;
     }
     if ($uri === '/backup/delete' && $method === 'POST') {
         if (csrfValid($_POST['csrf'] ?? null)) {
@@ -448,7 +483,7 @@ if (str_starts_with($uri, '/backup')) {
                 setFlash($e->getMessage());
             }
         }
-        header('Location: /backup'); exit;
+        header('Location: /backup'); return;
     }
 }
 
@@ -488,7 +523,7 @@ if ($uri === '/inventory/save' && $method === 'POST') {
             setFlash('Saved.');
         }
     }
-    header('Location: /inventory'); exit;
+    header('Location: /inventory'); return;
 }
 
 if ($uri === '/inventory/adjust' && $method === 'POST') {
@@ -500,7 +535,7 @@ if ($uri === '/inventory/adjust' && $method === 'POST') {
             $app->inv->save($item);
         }
     }
-    header('Location: /inventory'); exit;
+    header('Location: /inventory'); return;
 }
 
 if ($uri === '/inventory/restock' && $method === 'POST') {
@@ -526,24 +561,42 @@ if ($uri === '/inventory/restock' && $method === 'POST') {
             setFlash('Restocked ' . $qty . ' — cost of $' . money($cost) . ' logged.');
         }
     }
-    header('Location: /inventory'); exit;
+    header('Location: /inventory'); return;
 }
 
 if ($uri === '/inventory/delete' && $method === 'POST') {
     if (csrfValid($_POST['csrf'] ?? null)) {
         $app->inv->delete($_POST['id'] ?? '');
     }
-    header('Location: /inventory'); exit;
+    header('Location: /inventory'); return;
 }
 
 http_response_code(404);
 return view('login', ['title' => 'Not found', 'user' => $user]);
+}
+
+/**
+ * FrankenPHP worker-mode dispatch. The app boots once (see the top-level $app)
+ * and the same instance — including its SQLite connection and repository caches
+ * — is reused across requests. In any other SAPI we just handle the one request.
+ *
+ * v1.12+ API: frankenphp_handle_request($callback) returns false when the server
+ * is stopping, giving the worker a clean exit. The callable runs once per request
+ * with $_SERVER/$_GET/etc. reset to that request's values.
+ */
+if (function_exists('frankenphp_handle_request')) {
+    frankenphp_handle_request(static function () use ($app): void {
+        handle_request($app);
+    });
+} else {
+    handle_request($app);
+}
 
 /**
  * Render a view inside the layout and terminate.
  * @param array<string, mixed> $vars
  */
-function view(string $name, array $vars): void
+function view(string $name, array $vars)
 {
     $vars['user'] ??= null;
     // Inject isAdmin automatically so the layout's Users link works everywhere.
@@ -563,5 +616,5 @@ function view(string $name, array $vars): void
     extract($vars + ['body' => $body], EXTR_SKIP);
     require __DIR__ . '/../src/views/layout.php';
     echo ob_get_clean();
-    exit;
+    return;
 }
