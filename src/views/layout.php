@@ -38,6 +38,9 @@ use function Monster\e;
     <?php if (($flash = \Monster\takeFlash()) !== null): ?>
         <div class="flash"><?= e($flash) ?></div>
     <?php endif; ?>
+    <?php if (($lowNotice = \Monster\lowStockNotice()) !== null): ?>
+        <div class="flash notice-low"><?= e($lowNotice) ?></div>
+    <?php endif; ?>
     <?= $body ?>
 </main>
 <footer class="foot">monster.kawasu.wtf · energy-drink side hustle tracker</footer>

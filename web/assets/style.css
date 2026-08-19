@@ -38,6 +38,7 @@ body {
 
 .flash { background: #1b3a2a; border: 1px solid var(--pos); color: var(--pos); padding: 0.6rem 0.9rem; border-radius: 8px; margin-bottom: 1rem; }
 .error { background: #3a1b1b; border: 1px solid var(--neg); color: var(--neg); padding: 0.6rem 0.9rem; border-radius: 8px; margin-bottom: 1rem; }
+.notice-low { background: #3a1b1b; border: 1px solid var(--neg); color: var(--neg); padding: 0.6rem 0.9rem; border-radius: 8px; margin-bottom: 1rem; font-weight: 600; }
 .muted { color: var(--muted); }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin: 1rem 0 2rem; }

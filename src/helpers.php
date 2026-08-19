@@ -68,6 +68,26 @@ function setFlash(string $msg): void
 }
 
 /**
+ * Persistent low-stock notice. Unlike setFlash() this is NOT stored in the
+ * session — it is recomputed from live inventory on every page load, so it
+ * stays visible until the low stock is actually restocked, then disappears on
+ * its own. Returns the notice string when one or more items are low, else null.
+ */
+function lowStockNotice(): ?string
+{
+    $app = $GLOBALS['app'] ?? null;
+    if ($app === null || !isset($app->inv)) {
+        return null;
+    }
+    $low = $app->inv->lowStock();
+    $count = count($low);
+    if ($count === 0) {
+        return null;
+    }
+    return 'One or more items are low in stock.';
+}
+
+/**
  * Human-readable label for an inventory item, e.g. "Original 12-pack (ED-ORG)".
  * @param \Monster\InventoryItem|null $item
  */
