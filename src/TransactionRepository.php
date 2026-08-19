@@ -182,11 +182,12 @@ final class TransactionRepository
 
     /**
      * Monthly ROI / P&L series computed from (filtered) transactions.
-     * Each bucket carries that period's revenue, cost, net, ROI %, and the
-     * running cumulative net so a line chart can show profit building up.
+     * Each bucket carries that period's revenue, cost, net, ROI %, the
+     * running cumulative net, and the transaction count for the period,
+     * so a line chart can show profit building up.
      *
      * @param array{type?: string, category?: string, from?: string, to?: string} $filters
-     * @return list<array{period: string, label: string, revenue: float, cost: float, net: float, roiPct: float, cumNet: float}>
+     * @return list<array{period: string, label: string, revenue: float, cost: float, net: float, roiPct: float, cumNet: float, count: int}>
      */
     public function roiSeries(array $filters = []): array
     {
@@ -194,13 +195,14 @@ final class TransactionRepository
         foreach ($this->filtered($filters) as $t) {
             $period = substr($t->date, 0, 7); // YYYY-MM
             if (!isset($buckets[$period])) {
-                $buckets[$period] = ['revenue' => 0.0, 'cost' => 0.0];
+                $buckets[$period] = ['revenue' => 0.0, 'cost' => 0.0, 'count' => 0];
             }
             if ($t->type === Transaction::TYPE_EXPENSE) {
                 $buckets[$period]['cost'] += $t->amount;
             } else {
                 $buckets[$period]['revenue'] += $t->amount;
             }
+            $buckets[$period]['count'] += 1;
         }
         ksort($buckets);
 
@@ -222,6 +224,7 @@ final class TransactionRepository
                 'net' => $net,
                 'roiPct' => $roiPct,
                 'cumNet' => $cum,
+                'count' => $b['count'],
             ];
         }
         return $out;

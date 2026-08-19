@@ -5,7 +5,7 @@ declare(strict_types=1);
 /** @var list<string> $categories */
 /** @var list<\Monster\InventoryItem> $items */
 /** @var array{type?: string, category?: string, from?: string, to?: string} $filters */
-/** @var list<array{period: string, label: string, revenue: float, cost: float, net: float, roiPct: float, cumNet: float}> $roiSeries */
+/** @var list<array{period: string, label: string, revenue: float, cost: float, net: float, roiPct: float, cumNet: float, count: int}> $roiSeries */
 /** @var array{revenue: float, cost: float, net: float, roiPct: float} $roiOverall */
 use function Monster\e;
 use function Monster\money;
@@ -46,8 +46,7 @@ use function Monster\roiChartSvg;
     <div class="stat"><div class="label">Revenue</div><div class="value <?= moneyClass($summary['revenue']) ?>">$<?= money($summary['revenue']) ?></div></div>
     <div class="stat"><div class="label">Expenses</div><div class="value <?= moneyClass(-$summary['expenses']) ?>">$<?= money($summary['expenses']) ?></div></div>
     <div class="stat highlight"><div class="label">Net Profit</div><div class="value <?= moneyClass($summary['net']) ?>">$<?= money($summary['net']) ?></div></div>
-    <div class="stat"><div class="label">ROI</div><div class="value <?= moneyClass($roiOverall['roiPct']) ?>"><?= money($roiOverall['roiPct']) ?>%</div></div>
-    <div class="stat"><div class="label">Transactions</div><div class="value"><?= count($txns) ?></div></div>
+    <div class="stat"><div class="label">ROI</div><div class="value <?= moneyClass($roiOverall['roiPct']) ?>>"><?= money($roiOverall['roiPct']) ?>%</div></div>
 </section>
 
 <section class="card">
@@ -63,7 +62,7 @@ use function Monster\roiChartSvg;
 <?php if (!empty($roiSeries)): ?>
     <h2>Monthly breakdown</h2>
     <table class="table">
-        <thead><tr><th>Month</th><th class="num">Revenue</th><th class="num">Cost</th><th class="num">Net</th><th class="num">ROI %</th><th class="num">Cum. Net</th></tr></thead>
+        <thead><tr><th>Month</th><th class="num">Revenue</th><th class="num">Cost</th><th class="num">Net</th><th class="num">ROI %</th><th class="num">Txns</th><th class="num">Cum. Net</th></tr></thead>
         <tbody>
         <?php foreach ($roiSeries as $r): ?>
             <tr>
@@ -72,6 +71,7 @@ use function Monster\roiChartSvg;
                 <td class="num <?= moneyClass(-$r['cost']) ?>">$<?= money($r['cost']) ?></td>
                 <td class="num <?= moneyClass($r['net']) ?>">$<?= money($r['net']) ?></td>
                 <td class="num <?= moneyClass($r['roiPct']) ?>"><?= money($r['roiPct']) ?>%</td>
+                <td class="num"><?= (int) $r['count'] ?></td>
                 <td class="num <?= moneyClass($r['cumNet']) ?>">$<?= money($r['cumNet']) ?></td>
             </tr>
         <?php endforeach; ?>
