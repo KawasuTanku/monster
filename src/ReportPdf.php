@@ -124,16 +124,18 @@ final class ReportPdf
                 ['Date', $w * 0.16, 'L'],
                 ['Type', $w * 0.12, 'L'],
                 ['Category', $w * 0.20, 'L'],
-                ['Amount', $w * 0.16, 'R'],
-                ['Note', $w * 0.36, 'L'],
+                ['Amount', $w * 0.14, 'R'],
+                ['', $w * 0.04, 'L'], // spacer so Amount/Note headers don't abut
+                ['Note', $w * 0.34, 'L'],
             ], 14.0, true);
             foreach ($txns as $t) {
                 $pdf->row([
                     [$t->date, $w * 0.16, 'L'],
                     [ucfirst($t->type), $w * 0.12, 'L'],
                     [$t->category, $w * 0.20, 'L'],
-                    ['$' . number_format($t->amount, 2), $w * 0.16, 'R'],
-                    [mb_strlen($t->note) > 38 ? mb_substr($t->note, 0, 37) . '…' : $t->note, $w * 0.36, 'L'],
+                    ['$' . number_format($t->amount, 2), $w * 0.14, 'R'],
+                    ['', $w * 0.04, 'L'],
+                    [mb_strlen($t->note) > 38 ? mb_substr($t->note, 0, 37) . '…' : $t->note, $w * 0.34, 'L'],
                 ]);
             }
         }
