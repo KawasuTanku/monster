@@ -83,6 +83,7 @@ final class ReportPdf
         // ---- Monthly cumulative net chart ----
         if ($roiSeries !== []) {
             $pdf->line('Cumulative Net Profit by Month', $m, 13.0, true, 8.0);
+            $pdf->down(10);
             $chartSeries = array_map(static fn ($r) => ['label' => $r['label'], 'cumNet' => $r['cumNet']], $roiSeries);
             $pdf->barChart($chartSeries, $w);
             $pdf->down(8);

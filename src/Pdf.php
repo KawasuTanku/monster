@@ -175,7 +175,7 @@ final class Pdf
             $max = max($max, abs($s['cumNet']));
         }
         $barH = 12.0;
-        $gap = 8.0;
+        $gap = 12.0;
         $labelW = 70.0;
         $plotW = $width - $labelW;
         $zero = self::MARGIN + $labelW + ($plotW / 2); // center = zero line
@@ -183,8 +183,10 @@ final class Pdf
             $label = $s['label'];
             $val = $s['cumNet'];
             $len = ($plotW / 2) * (abs($val) / $max);
+            // Vertical center of the bar row (bar occupies [y - barH, y]).
+            $barCenter = $this->y - $barH / 2;
             // Label sits to the left, vertically centered on the bar row.
-            $this->textAt($label, self::MARGIN, $this->y - $barH / 2 - 3.0, 9.0);
+            $this->textAt($label, self::MARGIN, $barCenter + 3.0, 9.0);
             $barTop = $this->y - $barH;
             if ($val >= 0) {
                 $this->rect($zero, $barTop, $len, $barH, 0.20, 0.55, 0.30);
@@ -193,7 +195,7 @@ final class Pdf
                 $this->rect($zero - $len, $barTop, $len, $barH, 0.70, 0.25, 0.25);
                 $vtx = $zero - $len - 4 - $this->strWidth('$' . self::num($val), 9.0);
             }
-            $this->textAt('$' . self::num($val), $vtx, $this->y - $barH / 2 - 3.0, 9.0, true);
+            $this->textAt('$' . self::num($val), $vtx, $barCenter + 3.0, 9.0, true);
             $this->y -= ($barH + $gap);
         }
     }
