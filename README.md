@@ -52,11 +52,18 @@ store, so they restore onto either backend.
 
 ## Running locally
 
+Use the managed dev server (single fixed port, no orphaned processes):
+
 ```bash
 composer install
-php -S 127.0.0.1:8000 web/index.php
-# open http://127.0.0.1:8000  -> first visit triggers account setup
+bin/dev-server start     # http://127.0.0.1:8010  -> first visit triggers account setup
+bin/dev-server status    # is it up? (http status check)
+bin/dev-server stop      # tear it down
+# override the port with MONSTER_DEV_PORT=8080 bin/dev-server start
 ```
+
+Bare one-liner still works too: `php -S 127.0.0.1:8000 web/index.php` (note: that
+spins up a second server on 8000 — prefer `bin/dev-server` to avoid orphans).
 
 ## Tests
 
