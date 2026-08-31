@@ -27,16 +27,17 @@
 # to /opt/caddy/bin/composer.phar (deployed alongside the app), then `composer`.
 if [[ -n "${COMPOSER:-}" ]]; then
     COMPOSER_BIN="$COMPOSER"
-elif [[ -x /opt/caddy/composer.phar ]]; then
-    COMPOSER_BIN="/opt/caddy/composer.phar"
 elif [[ -x /opt/caddy/bin/composer.phar ]]; then
     COMPOSER_BIN="/opt/caddy/bin/composer.phar"
-else
-    echo "==> Composer not found — downloading to /opt/caddy/composer.phar"
-    php -r "copy('https://getcomposer.org.installer', '/tmp/composer-setup.php');"
-    php /tmp/composer-setup.php --install-dir=/opt/caddy --filename=composer.phar
-    rm -f /tmp/composer-setup.php
+elif [[ -x /opt/caddy/composer.phar ]]; then
     COMPOSER_BIN="/opt/caddy/composer.phar"
+else
+    echo "==> Composer not found — downloading to /opt/caddy/bin/composer.phar"
+    mkdir -p /opt/caddy/bin
+    php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php');"
+    php /tmp/composer-setup.php --install-dir=/opt/caddy/bin --filename=composer.phar
+    rm -f /tmp/composer-setup.php
+    COMPOSER_BIN="/opt/caddy/bin/composer.phar"
 fi
 
 REMOTE="${MONSTER_REMOTE:-https://github.com/KawasuTanku/monster.git}"
