@@ -10,6 +10,8 @@ use Monster\Auth;
 use Monster\Transaction;
 use Monster\TransactionRepository;
 use Monster\InventoryItem;
+use Monster\Customer;
+use Monster\TabPayment;
 
 // Session persistence. In FrankenPHP worker mode the default (per-process in-memory)
 // session handler does NOT survive across requests — a session written by one worker
@@ -76,6 +78,8 @@ if (session_status() === PHP_SESSION_NONE) {
 // to avoid serving store state written by a preceding request.
 $app->txns->clearCache();
 $app->inv->clearCache();
+$app->customers->clearCache();
+$app->tabs->clearCache();
 
 // Keep a daily snapshot so no cron job is required. This MUST run per request
 // (not at worker boot) or it would fire only once per worker process and go
@@ -139,7 +143,16 @@ $isAdmin = $app->auth->isAdmin($user);
 if ($uri === '/' || $uri === '/dashboard') {
     $summary = $app->txns->summary();
     $recent = $app->txns->all();
-    return view('dashboard', ['title' => 'Dashboard', 'user' => $user, 'summary' => $summary, 'recent' => $recent, 'stockValue' => $app->inv->totalStockValue()]);
+    $receivables = 0.0;
+    foreach ($app->customers->all() as $c) {
+        $bal = $c->balance($app->tabs, $app->txns);
+        if ($bal > 0) {
+            $receivables += $bal;
+        }
+    }
+    return view('dashboard', [
+        'title' => 'Dashboard', 'user' => $user, 'summary' => $summary, 'recent' => $recent, 'stockValue' => $app->inv->totalStockValue(), 'receivables' => round($receivables, 2),
+    ]);
 }
 
 if ($uri === '/transactions') {
@@ -543,6 +556,129 @@ if (str_starts_with($uri, '/backup')) {
         }
         header('Location: /backup'); return;
     }
+}
+
+// ---- Tabs (all authenticated users) ----
+if ($uri === '/tabs' && $method === 'GET') {
+    $customerBalances = [];
+    foreach ($app->customers->all() as $c) {
+        $customerBalances[$c->id] = $c->balance($app->tabs, $app->txns);
+    }
+    return view('tabs', [
+        'title' => 'Tabs', 'user' => $user, 'isAdmin' => $isAdmin,
+        'customers' => $app->customers->all(),
+        'balances' => $customerBalances,
+    ]);
+}
+
+if ($uri === '/tabs/new' && $method === 'POST') {
+    if (csrfValid($_POST['csrf'] ?? null)) {
+        $name = trim($_POST['name'] ?? '');
+        if ($name !== '') {
+            $c = new Customer();
+            $c->id = 'cust_' . bin2hex(random_bytes(8));
+            $c->name = $name;
+            $c->note = trim($_POST['note'] ?? '');
+            $c->createdAt = time();
+            $app->customers->save($c);
+            setFlash('Customer added.');
+        }
+    }
+    header('Location: /tabs'); return;
+}
+
+if (preg_match('#^/tabs/([a-zA-Z0-9_-]+)$#', $uri, $m) && $method === 'GET') {
+    $customer = $app->customers->find($m[1]);
+    if ($customer === null) {
+        http_response_code(404);
+        return view('tabs', ['title' => 'Not found', 'user' => $user, 'isAdmin' => $isAdmin, 'customers' => $app->customers->all(), 'balances' => []]);
+    }
+    $charges = $app->txns->forCustomer($customer->id);
+    $payments = $app->tabs->forCustomer($customer->id);
+    return view('tab-detail', [
+        'title' => $customer->name, 'user' => $user, 'isAdmin' => $isAdmin,
+        'customer' => $customer,
+        'charges' => $charges,
+        'payments' => $payments,
+        'balance' => $customer->balance($app->tabs, $app->txns),
+        'items' => $app->inv->all(),
+    ]);
+}
+
+if (preg_match('#^/tabs/([a-zA-Z0-9_-]+)/charge$#', $uri, $m) && $method === 'POST') {
+    if (csrfValid($_POST['csrf'] ?? null)) {
+        $customer = $app->customers->find($m[1]);
+        if ($customer !== null) {
+            $linkedItemId = trim($_POST['itemId'] ?? '');
+            $linkedQty = max(0.0, (float) ($_POST['qty'] ?? 1));
+            $amount = max(0.0, (float) ($_POST['amount'] ?? 0));
+            $t = new Transaction();
+            $t->id = bin2hex(random_bytes(12));
+            $t->type = Transaction::TYPE_SALE;
+            $t->amount = $amount;
+            $t->category = trim($_POST['category'] ?? 'Retail');
+            $t->note = trim($_POST['note'] ?? '');
+            $t->date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_POST['date'] ?? '') ? $_POST['date'] : date('Y-m-d');
+            $t->createdAt = time();
+            $t->customerId = $customer->id;
+            $t->itemId = $linkedItemId;
+            $t->qty = $linkedQty;
+            if ($linkedItemId !== '') {
+                $item = $app->inv->find($linkedItemId);
+                if ($item !== null) {
+                    $delta = (int) round($linkedQty);
+                    $item->qtyOnHand = max(0, $item->qtyOnHand - $delta);
+                    if ($delta !== 0) {
+                        $app->inv->save($item);
+                    }
+                }
+            }
+            $app->txns->save($t);
+            setFlash('Charge added.');
+        }
+    }
+    header('Location: /tabs/' . $m[1]); return;
+}
+
+if (preg_match('#^/tabs/([a-zA-Z0-9_-]+)/payment$#', $uri, $m) && $method === 'POST') {
+    if (csrfValid($_POST['csrf'] ?? null)) {
+        $customer = $app->customers->find($m[1]);
+        if ($customer !== null) {
+            $amount = max(0.0, (float) ($_POST['amount'] ?? 0));
+            if ($amount > 0) {
+                $p = new TabPayment();
+                $p->id = 'pay_' . bin2hex(random_bytes(8));
+                $p->customerId = $customer->id;
+                $p->amount = $amount;
+                $p->date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_POST['date'] ?? '') ? $_POST['date'] : date('Y-m-d');
+                $p->note = trim($_POST['note'] ?? '');
+                $p->createdAt = time();
+                $app->tabs->save($p);
+                setFlash('Payment received.');
+            }
+        }
+    }
+    header('Location: /tabs/' . $m[1]); return;
+}
+
+if (preg_match('#^/tabs/([a-zA-Z0-9_-]+)/delete$#', $uri, $m) && $method === 'POST') {
+    if (csrfValid($_POST['csrf'] ?? null)) {
+        $customer = $app->customers->find($m[1]);
+        if ($customer !== null) {
+            $balance = $customer->balance($app->tabs, $app->txns);
+            if (abs($balance) > 0.005) {
+                setFlash('Cannot delete: customer still has a balance of $' . money($balance) . '.');
+            } else {
+                // Delete their payments (charges remain as financial history).
+                foreach ($app->tabs->forCustomer($customer->id) as $pay) {
+                    $app->tabs->delete($pay->id);
+                }
+                $app->customers->delete($customer->id);
+                setFlash('Customer deleted.');
+            }
+        }
+    }
+    header('Location: /tabs'); return;
 }
 
 // ---- Inventory (all authenticated users) ----

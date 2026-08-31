@@ -18,15 +18,17 @@ final class Transaction
     public const TYPE_SALE = 'sale';
     public const TYPE_EXPENSE = 'expense';
 
-    public string $id;
-    public string $type;
-    public float $amount;
-    public string $category;
-    public string $note;
-    public string $date; // YYYY-MM-DD
-    public int $createdAt;
+    public string $id = '';
+    public string $type = '';
+    public float $amount = 0.0;
+    public string $category = '';
+    public string $note = '';
+    public string $date = ''; // YYYY-MM-DD
+    public int $createdAt = 0;
     /** Linked inventory item id, or '' when this transaction is not item-linked. */
     public string $itemId = '';
+    /** Customer id for tab charges, or '' when not a tab charge. */
+    public string $customerId = '';
     /** Units moved for item-linked transactions (cans). Defaults to 1.0. */
     public float $qty = 1.0;
 
@@ -44,6 +46,7 @@ final class Transaction
         $t->date = (string) ($row['date'] ?? date('Y-m-d'));
         $t->createdAt = (int) ($row['createdAt'] ?? time());
         $t->itemId = (string) ($row['itemId'] ?? '');
+        $t->customerId = (string) ($row['customerId'] ?? '');
         $t->qty = (float) ($row['qty'] ?? 1);
         return $t;
     }
@@ -60,6 +63,7 @@ final class Transaction
             'date' => $this->date,
             'createdAt' => $this->createdAt,
             'itemId' => $this->itemId,
+            'customerId' => $this->customerId,
             'qty' => round($this->qty, 4),
         ];
     }

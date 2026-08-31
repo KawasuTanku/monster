@@ -25,6 +25,10 @@ use function Monster\moneyClass;
         <div class="label">Stock value</div>
         <div class="value">$<?= money($stockValue) ?></div>
     </div>
+    <div class="stat<?= $receivables > 0 ? ' danger' : '' ?>">
+        <div class="label">Receivables <span class="muted">· <a href="/tabs">tabs</a></span></div>
+        <div class="value">$<?= money($receivables) ?></div>
+    </div>
 </section>
 
 <h2>By category</h2>

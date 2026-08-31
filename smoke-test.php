@@ -23,14 +23,26 @@ $descriptor = [
     1 => ['pipe', 'w'],
     2 => ['pipe', 'w'],
 ];
+// Recursively remove a directory tree (used to clear data/ before symlinking).
+function rmrf(string $dir): void
+{
+    if (is_link($dir)) {
+        @unlink($dir);
+        return;
+    }
+    if (!is_dir($dir)) {
+        return;
+    }
+    $items = array_diff(scandir($dir) ?: [], ['.', '..']);
+    foreach ($items as $item) {
+        $path = $dir . '/' . $item;
+        is_dir($path) ? rmrf($path) : @unlink($path);
+    }
+    @rmdir($dir);
+}
 // Point the app's hardcoded data/ at our throwaway dir. Remove any existing
 // data/ or symlink first so the symlink is reliably created each run.
-if (is_link($root . '/data')) {
-    @unlink($root . '/data');
-} elseif (is_dir($root . '/data')) {
-    array_map('unlink', glob($root . '/data/*') ?: []);
-    @rmdir($root . '/data');
-}
+rmrf($root . '/data');
 symlink($testData, $root . '/data');
 
 $proc = proc_open(PHP_BINARY . " -S $host " . escapeshellarg($root . '/web/index.php'), $descriptor, $pipes);
@@ -428,6 +440,55 @@ curl("$base/inventory/delete", $cookie, 'POST', ['csrf' => $csrfInv, 'id' => $in
 $invDel = curl("$base/inventory", $cookie);
 assertMissing($invDel, '(ED-ORG)', 'inventory item removed after delete');
 
+// 16) TABS: create customer, add charge (linked to item), verify stock decrement + balance.
+$tabsPage = curl("$base/tabs", $cookie);
+assertHas($tabsPage, 'Tabs', 'admin can reach /tabs');
+$csrfTabs = '';
+if (preg_match('/name="csrf" value="([^"]+)"/', $tabsPage, $m)) { $csrfTabs = $m[1]; }
+curl("$base/tabs/new", $cookie, 'POST', ['csrf' => $csrfTabs, 'name' => 'Kawasu', 'note' => 'test tab']);
+$tabsAfter = curl("$base/tabs", $cookie);
+assertHas($tabsAfter, 'Kawasu', 'customer created on /tabs');
+// Grab customer id from the view link.
+preg_match('#href="/tabs/([a-zA-Z0-9_-]+)"#', $tabsAfter, $mCust);
+$custId = $mCust[1] ?? '';
+assertHas($custId !== '' ? 'ok' : '', 'ok', 'customer has an id');
+// Add an inventory item to link a charge to.
+$invPage = curl("$base/inventory", $cookie);
+preg_match('/name="csrf" value="([^"]+)"/', $invPage, $m);
+$csrfInv2 = $m[1] ?? '';
+$saveResp2 = curl("$base/inventory/save", $cookie, 'POST', [
+    'csrf' => $csrfInv2, 'id' => '', 'name' => 'Original', 'variant' => '12-pack',
+    'sku' => 'ED-ORG2', 'qtyOnHand' => '10', 'unitCost' => '14.00', 'unitPrice' => '24.00',
+    'reorderAt' => '5', 'supplier' => 'Acme',
+]);
+$invAfter2 = curl("$base/inventory", $cookie);
+preg_match('/href="\/inventory\?edit=([^"]+)"/', $invAfter2, $mi2);
+$invId2 = $mi2[1] ?? '';
+// Charge 3 cans at $24 = $72.
+$tabDetail = curl("$base/tabs/" . $custId, $cookie);
+preg_match('/name="csrf" value="([^"]+)"/', $tabDetail, $mTD);
+$csrfTD = $mTD[1] ?? '';
+curl("$base/tabs/" . $custId . "/charge", $cookie, 'POST', [
+    'csrf' => $csrfTD, 'date' => '2026-08-20', 'amount' => '72.00',
+    'category' => 'Retail', 'note' => 'linked charge',
+    'itemId' => $invId2, 'qty' => '3',
+]);
+$tabDetail2 = curl("$base/tabs/" . $custId, $cookie);
+assertHas($tabDetail2, '$72.00', 'charge of $72.00 shows on tab detail');
+assertHas($tabDetail2, '$72.00', 'balance = $72.00 after one charge');
+// Stock should have decremented by 3 (10 -> 7).
+$invCharged = curl("$base/inventory", $cookie);
+assertHas($invCharged, '$98.00', 'stock value = 7 x 14 = 98 after linked charge of 3');
+// Make a payment of $30.
+preg_match('/name="csrf" value="([^"]+)"/', $tabDetail2, $mTP);
+$csrfTP = $mTP[1] ?? '';
+curl("$base/tabs/" . $custId . "/payment", $cookie, 'POST', [
+    'csrf' => $csrfTP, 'date' => '2026-08-21', 'amount' => '30.00', 'note' => 'partial payment',
+]);
+$tabDetail3 = curl("$base/tabs/" . $custId, $cookie);
+assertHas($tabDetail3, '$42.00', 'balance = $42.00 after $30 payment (72 - 30)');
+assertHas($tabDetail3, '$30.00', 'payment shows in payment history');
+
 // 13) Member alice can log in and record a transaction.
 $jarA = tempnam(sys_get_temp_dir(), 'monster_alice_');
 $rA = curl("$base/login", $jarA, 'POST', ['user' => 'alice', 'pass' => 'alicepass1']);
@@ -467,7 +528,7 @@ assertHas($lockedStill, 'Too many failed attempts', 'correct password rejected w
 @unlink($jarL);
 
 proc_terminate($proc);
-@unlink($root . '/data');
+rmrf($root . '/data');
 foreach (glob($testData . '/*') ?: [] as $f) {
     if (is_file($f)) { @unlink($f); }
 }
@@ -526,12 +587,7 @@ else {
     proc_terminate($proc2);
 }
 // Clean up the data/ symlink (or directory) so a subsequent run starts fresh.
-if (is_link($root . '/data')) {
-    @unlink($root . '/data');
-} elseif (is_dir($root . '/data')) {
-    array_map('unlink', glob($root . '/data/*') ?: []);
-    @rmdir($root . '/data');
-}
+rmrf($root . '/data');
 foreach (glob($migDir . '/*') ?: [] as $f) {
     if (is_file($f)) { @unlink($f); }
 }

@@ -16,20 +16,22 @@ final class App
     public Auth $auth;
     public TransactionRepository $txns;
     public InventoryRepository $inv;
+    public CustomerRepository $customers;
+    public TabPaymentRepository $tabs;
     public Backup $backup;
 
     public function __construct(string $baseDir)
     {
         $dataDir = rtrim($baseDir, '/') . '/data';
         if (!is_dir($dataDir)) {
-            // @ suppresses a benign race when multiple worker processes boot at
-            // once and both try to create it (the loser just sees it already exist).
             @mkdir($dataDir, 0o750, true);
         }
         $this->storage = new Storage($dataDir . '/db.sqlite');
         $this->auth = new Auth($this->storage);
         $this->txns = new TransactionRepository($this->storage);
         $this->inv = new InventoryRepository($this->storage);
+        $this->customers = new CustomerRepository($this->storage);
+        $this->tabs = new TabPaymentRepository($this->storage);
         $this->backup = new Backup($this->storage);
     }
 }

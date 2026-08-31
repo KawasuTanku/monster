@@ -102,10 +102,11 @@ final class TransactionRepository
         }));
     }
 
-    /**
-     * Case-insensitive substring search across note and category.
-     * @return list<Transaction>
-     */
+    /** @return list<Transaction> Sales for a single customer, newest first. */
+    public function forCustomer(string $customerId): array
+    {
+        return array_values(array_filter($this->all(), static fn(Transaction $t): bool => $t->customerId === $customerId));
+    }
     public function search(string $q): array
     {
         $q = trim($q);

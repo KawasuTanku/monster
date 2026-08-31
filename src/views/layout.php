@@ -21,6 +21,7 @@ use function Monster\e;
         <nav class="nav">
             <a href="/dashboard">Dashboard</a>
             <a href="/transactions">Transactions</a>
+            <a href="/tabs">Tabs</a>
             <a href="/report">Report</a>
             <a href="/inventory">Inventory</a>
             <a href="/report/reorder">Reorder</a>

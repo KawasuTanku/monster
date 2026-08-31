@@ -86,7 +86,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     date        TEXT NOT NULL,
     createdAt   INTEGER NOT NULL,
     itemId      TEXT NOT NULL DEFAULT '',
-    qty         REAL NOT NULL DEFAULT 1
+    qty         REAL NOT NULL DEFAULT 1,
+    customerId  TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS inventory (
     id          TEXT PRIMARY KEY,
@@ -112,7 +113,34 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT
 );
+CREATE TABLE IF NOT EXISTS customers (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL DEFAULT '',
+    note        TEXT NOT NULL DEFAULT '',
+    createdAt   INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS tab_payments (
+    id          TEXT PRIMARY KEY,
+    customerId  TEXT NOT NULL DEFAULT '',
+    amount      REAL NOT NULL DEFAULT 0,
+    date        TEXT NOT NULL,
+    note        TEXT NOT NULL DEFAULT '',
+    createdAt   INTEGER NOT NULL DEFAULT 0
+);
 SQL);
+
+        // Idempotent migration: add customerId to transactions if missing.
+        $cols = $this->pdo->query('PRAGMA table_info(transactions)')->fetchAll();
+        $hasCustomerId = false;
+        foreach ($cols as $col) {
+            if ($col['name'] === 'customerId') {
+                $hasCustomerId = true;
+                break;
+            }
+        }
+        if (!$hasCustomerId) {
+            $this->pdo->exec('ALTER TABLE transactions ADD COLUMN customerId TEXT NOT NULL DEFAULT \'\'');
+        }
 
         // Import a legacy JSON store if present and the DB is empty.
         $legacyJson = dirname($this->file) . '/db.json';
@@ -137,6 +165,8 @@ SQL);
             'inventory' => $this->getList('inventory'),
             'users' => $this->getList('users'),
             'settings' => $settings,
+            'customers' => $this->getList('customers'),
+            'tab_payments' => $this->getList('tab_payments'),
         ];
     }
 
@@ -148,9 +178,11 @@ SQL);
      */
     public function loadDump(array $dump): void
     {
-        $txCols = ['id', 'type', 'amount', 'category', 'note', 'date', 'createdAt', 'itemId', 'qty'];
+        $txCols = ['id', 'type', 'amount', 'category', 'note', 'date', 'createdAt', 'itemId', 'qty', 'customerId'];
         $invCols = ['id', 'sku', 'name', 'variant', 'qtyOnHand', 'unitCost', 'unitPrice', 'reorderAt', 'supplier', 'createdAt', 'updatedAt'];
         $userCols = ['id', 'username', 'password_hash', 'role', 'createdAt'];
+        $custCols = ['id', 'name', 'note', 'createdAt'];
+        $payCols = ['id', 'customerId', 'amount', 'date', 'note', 'createdAt'];
 
         $this->pdo->exec('BEGIN');
         try {
@@ -158,9 +190,13 @@ SQL);
             $this->pdo->exec('DELETE FROM inventory');
             $this->pdo->exec('DELETE FROM users');
             $this->pdo->exec('DELETE FROM settings');
+            $this->pdo->exec('DELETE FROM customers');
+            $this->pdo->exec('DELETE FROM tab_payments');
             $this->insertRows('transactions', $txCols, $dump['transactions'] ?? []);
             $this->insertRows('inventory', $invCols, $dump['inventory'] ?? []);
             $this->insertRows('users', $userCols, $dump['users'] ?? []);
+            $this->insertRows('customers', $custCols, $dump['customers'] ?? []);
+            $this->insertRows('tab_payments', $payCols, $dump['tab_payments'] ?? []);
             foreach (($dump['settings'] ?? []) as $k => $v) {
                 $this->setSetting((string) $k, $v);
             }
@@ -174,7 +210,7 @@ SQL);
     private function isEmpty(): bool
     {
         $count = (int) $this->pdo->query(
-            'SELECT (SELECT COUNT(*) FROM transactions) + (SELECT COUNT(*) FROM inventory) + (SELECT COUNT(*) FROM users) + (SELECT COUNT(*) FROM settings)'
+            'SELECT (SELECT COUNT(*) FROM transactions) + (SELECT COUNT(*) FROM inventory) + (SELECT COUNT(*) FROM users) + (SELECT COUNT(*) FROM settings) + (SELECT COUNT(*) FROM customers) + (SELECT COUNT(*) FROM tab_payments)'
         )->fetchColumn();
         return $count === 0;
     }
@@ -199,13 +235,17 @@ SQL);
             return;
         }
 
-        $txCols = ['id', 'type', 'amount', 'category', 'note', 'date', 'createdAt', 'itemId', 'qty'];
+        $txCols = ['id', 'type', 'amount', 'category', 'note', 'date', 'createdAt', 'itemId', 'qty', 'customerId'];
         $invCols = ['id', 'sku', 'name', 'variant', 'qtyOnHand', 'unitCost', 'unitPrice', 'reorderAt', 'supplier', 'createdAt', 'updatedAt'];
         $userCols = ['id', 'username', 'password_hash', 'role', 'createdAt'];
+        $custCols = ['id', 'name', 'note', 'createdAt'];
+        $payCols = ['id', 'customerId', 'amount', 'date', 'note', 'createdAt'];
 
         $this->insertRows('transactions', $txCols, $data['transactions'] ?? []);
         $this->insertRows('inventory', $invCols, $data['inventory'] ?? []);
         $this->insertRows('users', $userCols, $data['users'] ?? []);
+        $this->insertRows('customers', $custCols, $data['customers'] ?? []);
+        $this->insertRows('tab_payments', $payCols, $data['tab_payments'] ?? []);
 
         foreach (($data['settings'] ?? []) as $k => $v) {
             $this->setSetting((string) $k, $v);
@@ -337,7 +377,7 @@ SQL);
     private function tableFor(string $key): string
     {
         return match ($key) {
-            'transactions', 'inventory', 'users' => $key,
+            'transactions', 'inventory', 'users', 'customers', 'tab_payments' => $key,
             default => throw new \InvalidArgumentException("Unknown collection: $key"),
         };
     }
