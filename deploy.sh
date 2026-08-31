@@ -32,7 +32,11 @@ elif [[ -x /opt/caddy/composer.phar ]]; then
 elif [[ -x /opt/caddy/bin/composer.phar ]]; then
     COMPOSER_BIN="/opt/caddy/bin/composer.phar"
 else
-    COMPOSER_BIN="composer"
+    echo "==> Composer not found — downloading to /opt/caddy/composer.phar"
+    php -r "copy('https://getcomposer.org.installer', '/tmp/composer-setup.php');"
+    php /tmp/composer-setup.php --install-dir=/opt/caddy --filename=composer.phar
+    rm -f /tmp/composer-setup.php
+    COMPOSER_BIN="/opt/caddy/composer.phar"
 fi
 
 REMOTE="${MONSTER_REMOTE:-https://github.com/KawasuTanku/monster.git}"
