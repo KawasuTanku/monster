@@ -127,10 +127,10 @@ use function Monster\trashIcon;
         <tbody>
         <?php foreach ($charges as $t): ?>
             <tr>
-                <td><?= e($t->date) ?></td>
-                <td><?= e($t->category) ?></td>
-                <td class="num">$<?= money($t->amount) ?></td>
-                <td class="muted"><?= e($t->note) ?></td>
+                <td data-label="Date"><?= e($t->date) ?></td>
+                <td data-label="Category"><?= e($t->category) ?></td>
+                <td class="num" data-label="Amount">$<?= money($t->amount) ?></td>
+                <td class="muted" data-label="Note"><?= e($t->note) ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>
@@ -146,9 +146,9 @@ use function Monster\trashIcon;
         <tbody>
         <?php foreach ($payments as $p): ?>
             <tr>
-                <td><?= e($p->date) ?></td>
-                <td class="num pos">$<?= money($p->amount) ?></td>
-                <td class="muted"><?= e($p->note) ?></td>
+                <td data-label="Date"><?= e($p->date) ?></td>
+                <td class="num" data-label="Amount">$<?= money($p->amount) ?></td>
+                <td class="muted" data-label="Note"><?= e($p->note) ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>

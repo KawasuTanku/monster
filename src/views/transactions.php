@@ -122,11 +122,11 @@ $base = '/transactions?' . http_build_query(array_filter([
         <tbody>
         <?php foreach ($txns as $t): ?>
             <tr>
-                <td><?= e($t->date) ?></td>
-                <td><?= e($t->type) ?></td>
-                <td><?= e($t->category) ?></td>
-                <td class="num <?= moneyClass($t->signed()) ?>">$<?= money($t->amount) ?></td>
-                <td class="muted"><?= e($t->note) ?><?= $t->itemId !== '' ? ' · ' . e(itemLabel($itemMap[$t->itemId] ?? null)) : '' ?></td>
+                <td data-label="Date"><?= e($t->date) ?></td>
+                <td data-label="Type"><?= e($t->type) ?></td>
+                <td data-label="Category"><?= e($t->category) ?></td>
+                <td class="num" data-label="Amount"><span class="<?= moneyClass($t->signed()) ?>">$<?= money($t->amount) ?></span></td>
+                <td class="muted" data-label="Note"><?= e($t->note) ?><?= $t->itemId !== '' ? ' · ' . e(itemLabel($itemMap[$t->id] ?? null)) : '' ?></td>
                 <td class="row-actions">
                     <form method="post" action="/transactions/duplicate" class="inline">
                         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">

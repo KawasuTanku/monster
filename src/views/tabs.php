@@ -36,11 +36,11 @@ use function Monster\trashIcon;
         <?php foreach ($customers as $c): ?>
             <?php $bal = $balances[$c->id] ?? 0.0; ?>
             <tr>
-                <td>
+                <td data-label="Customer">
                     <a href="/tabs/<?= e($c->id) ?>"><?= e($c->name) ?></a>
                     <?php if ($c->note !== ''): ?><span class="muted"> · <?= e($c->note) ?></span><?php endif; ?>
                 </td>
-                <td class="num <?= moneyClass(-$bal) ?>"><strong>$<?= money($bal) ?></strong></td>
+                <td class="num" data-label="Balance"><strong class="<?= moneyClass(-$bal) ?>">$<?= money($bal) ?></strong></td>
                 <td class="row-actions">
                     <a href="/tabs/<?= e($c->id) ?>">view</a>
                 </td>

@@ -39,8 +39,8 @@ use function Monster\moneyClass;
         <thead><tr><th>Category</th><th class="num">Net</th></tr></thead>
         <tbody>
         <?php foreach ($summary['by_category'] as $cat => $val): ?>
-            <tr><td><?= e($cat ?: '(uncategorized)') ?></td>
-                <td class="num <?= moneyClass($val) ?>">$<?= money($val) ?></td></tr>
+            <tr><td data-label="Category"><?= e($cat ?: '(uncategorized)') ?></td>
+                <td class="num <?= moneyClass($val) ?>" data-label="Net">$<?= money($val) ?></td></tr>
         <?php endforeach; ?>
         </tbody>
     </table>
@@ -55,11 +55,11 @@ use function Monster\moneyClass;
         <tbody>
         <?php foreach (array_slice($recent, 0, 8) as $t): ?>
             <tr>
-                <td><?= e($t->date) ?></td>
-                <td><?= e($t->type) ?></td>
-                <td><?= e($t->category) ?></td>
-                <td class="num <?= moneyClass($t->signed()) ?>">$<?= money($t->amount) ?></td>
-                <td class="muted"><?= e($t->note) ?></td>
+                <td data-label="Date"><?= e($t->date) ?></td>
+                <td data-label="Type"><?= e($t->type) ?></td>
+                <td data-label="Category"><?= e($t->category) ?></td>
+                <td class="num" data-label="Amount"><span class="<?= moneyClass($t->signed()) ?>">$<?= money($t->amount) ?></span></td>
+                <td class="muted" data-label="Note"><?= e($t->note) ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>

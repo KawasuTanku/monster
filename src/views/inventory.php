@@ -68,16 +68,16 @@ use function Monster\moneyClass;
         <tbody>
         <?php foreach ($items as $i): ?>
             <tr<?= $i->isLow() ? ' class="low"' : '' ?>>
-                <td><?= e($i->name) ?><?= $i->sku !== '' ? ' <span class="muted">(' . e($i->sku) . ')</span>' : '' ?></td>
-                <td class="muted"><?= e($i->variant) ?></td>
-                <td class="num"><?= e((string) $i->qtyOnHand) ?><?= $i->isLow() ? ' ⚠' : '' ?></td>
-                <td class="num">$<?= money($i->unitCost) ?></td>
-                <td class="num">$<?= money($i->unitPrice) ?></td>
-                <td class="num">$<?= money($i->stockValue()) ?></td>
+                <td data-label="Name"><?= e($i->name) ?><?= $i->sku !== '' ? ' <span class="muted">(' . e($i->sku) . ')</span>' : '' ?></td>
+                <td class="muted" data-label="Variant"><?= e($i->variant) ?></td>
+                <td class="num" data-label="Qty"><?= e((string) $i->qtyOnHand) ?><?= $i->isLow() ? ' ⚠' : '' ?></td>
+                <td class="num" data-label="Cost">$<?= money($i->unitCost) ?></td>
+                <td class="num" data-label="Price">$<?= money($i->unitPrice) ?></td>
+                <td class="num" data-label="Stock $">$<?= money($i->stockValue()) ?></td>
                 <?php $p = $pnl[$i->id] ?? null; ?>
-                <td class="num"><?= $p ? '$' . money($p['revenue']) : '—' ?></td>
-                <td class="num"><?= $p ? '$' . money($p['cogs']) : '—' ?></td>
-                <td class="num <?= $p ? moneyClass($p['net']) : '' ?>"><strong><?= $p ? '$' . money($p['net']) : '—' ?></strong></td>
+                <td class="num" data-label="Revenue"><?= $p ? '$' . money($p['revenue']) : '—' ?></td>
+                <td class="num" data-label="COGS"><?= $p ? '$' . money($p['cogs']) : '—' ?></td>
+                <td class="num <?= $p ? moneyClass($p['net']) : '' ?>" data-label="Profit"><strong><?= $p ? '$' . money($p['net']) : '—' ?></strong></td>
                 <?php $rf = 'restock-' . e($i->id); ?>
                 <td class="num restock-qty">
                     <input type="number" min="1" step="1" name="qty" form="<?= $rf ?>" value="12" class="qty" title="Restock quantity" aria-label="Restock quantity">
