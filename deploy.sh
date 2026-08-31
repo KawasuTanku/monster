@@ -2,11 +2,8 @@
 #
 # deploy.sh — pull the latest Monster app into the Caddy doc root.
 #
-# The web server (FrankenPHP) runs as user `frankenphp` and serves:
-#     /opt/caddy/monster.kawasu.wtf/web
-# That directory is owned by `frankenphp`, not your deploy user, so this script
-# writes files *as* that user. Run as root or via sudo with NOPASSWD for the
-# frankenphp user (or just `sudo ./deploy.sh`).
+# On the Warpstrand server, Caddy + PHP-FPM both run as www-data, so this
+# script deploys files owned by www-data. Run as root or via sudo.
 #
 # What it does:
 #   1. get the repo into DEST — handles three cases without failing if the
@@ -16,11 +13,11 @@
 #        - DEST exists but no .git   -> git init + remote + force-checkout
 #          (untracked dirs like logs/ are left alone)
 #   2. install composer deps (vendor/)
-#   3. ensure the data/ dir exists and is writable by frankenphp
-#   4. set ownership so FrankenPHP can read/write the app + its data
+#   3. ensure the data/ dir exists and is writable by www-data
+#   4. set ownership so Caddy + PHP-FPM can read/write the app + its data
 #
 # Env overrides (handy for testing):
-#   MONSTER_DEST   default /opt/caddy/monster.kawasu.wtf
+#   MONSTER_DEST   default /opt/caddy/monster.warpstrand.com
 #   MONSTER_REMOTE default https://github.com/KawasuTanku/monster.git
 #   MONSTER_BRANCH default main
 #   COMPOSER       default: COMPOSER env, then /opt/caddy/bin/composer.phar, then `composer` on PATH
@@ -38,11 +35,11 @@ fi
 
 REMOTE="${MONSTER_REMOTE:-https://github.com/KawasuTanku/monster.git}"
 DEST="${MONSTER_DEST:-/opt/caddy/monster.warpstrand.com}"
-OWNER="root:root"
+OWNER="www-data:www-data"
 BRANCH="${MONSTER_BRANCH:-main}"
 
-# Run the heavy lifting as the frankenphp user when we are root.
-run_as() { if [[ "$(id -u)" -eq 0 ]]; then sudo -u frankenphp bash -c "$1"; else bash -c "$1"; fi; }
+# Run the heavy lifting as www-data when we are root.
+run_as() { if [[ "$(id -u)" -eq 0 ]]; then sudo -u www-data bash -c "$1"; else bash -c "$1"; fi; }
 
 echo "==> Deploying monster to $DEST"
 
@@ -80,10 +77,10 @@ fi
 rm -rf "$DATA_BAK"
 
 echo "==> Installing composer dependencies"
-run_as "cd '$DEST' && '$COMPOSER_BIN' install --no-dev --no-interaction --optimize-autoloader"
+sudo -u www-data bash -c "cd '$DEST' && $COMPOSER_BIN install --no-dev --no-interaction --optimize-autoloader"
 
 echo "==> Preparing data directory"
-run_as "mkdir -p '$DEST/data' && chmod 750 '$DEST/data'"
+mkdir -p "$DEST/data" && chmod 750 "$DEST/data"
 
 echo "==> Fixing ownership"
 chown -R "$OWNER" "$DEST"
@@ -96,4 +93,4 @@ if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files caddy.servi
     systemctl restart caddy.service || echo "  (warn: caddy restart failed; restart manually)"
 fi
 
-echo "==> Done. Visit https://monster.kawasu.wtf/setup and complete first-run setup."
+echo "==> Done. Visit https://monster.warpstrand.com/setup and complete first-run setup."
