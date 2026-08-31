@@ -9,6 +9,20 @@ use function Monster\money;
 <h1>Backups</h1>
 <p class="muted">Full snapshots of <code><?= e($storagePath) ?></code>. A daily snapshot is taken automatically (kept 14 days). Backups are stored outside the web root and are not served directly.</p>
 
+<section class="card">
+    <h2>Import backup</h2>
+    <p class="muted">Upload a backup JSON from another Monster install to restore its data.</p>
+    <form method="post" action="/backup/upload" enctype="multipart/form-data" class="form">
+        <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
+        <div class="row">
+            <label class="wide">Backup file (.json)
+                <input type="file" name="backup" accept=".json,application/json" required>
+            </label>
+        </div>
+        <div class="actions"><button type="submit">Upload & import</button></div>
+    </form>
+</section>
+
 <form method="post" action="/backup/create" class="inline">
     <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
     <button type="submit">Create backup snapshot</button>

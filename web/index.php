@@ -505,6 +505,28 @@ if (str_starts_with($uri, '/backup')) {
             'storagePath' => $app->storage->path(),
         ]);
     }
+    if ($uri === '/backup/upload' && $method === 'POST') {
+        if (csrfValid($_POST['csrf'] ?? null) && isset($_FILES['backup']) && is_uploaded_file($_FILES['backup']['tmp_name'] ?? '')) {
+            $tmp = $_FILES['backup']['tmp_name'];
+            $raw = file_get_contents($tmp);
+            if ($raw !== false) {
+                try {
+                    $data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+                    if (is_array($data) && isset($data['transactions']) && isset($data['inventory'])) {
+                        // Snapshot current before importing.
+                        $app->backup->create();
+                        $app->storage->loadDump($data);
+                        setFlash('Backup imported successfully.');
+                    } else {
+                        setFlash('Invalid backup file: missing expected data.');
+                    }
+                } catch (\JsonException) {
+                    setFlash('Invalid backup file: not valid JSON.');
+                }
+            }
+        }
+        header('Location: /backup'); return;
+    }
     if ($uri === '/backup/download' && $method === 'GET') {
         // Download the most recent backup (or a specific one via ?file=).
         $file = $_GET['file'] ?? null;
