@@ -27,6 +27,8 @@
 # to /opt/caddy/bin/composer.phar (deployed alongside the app), then `composer`.
 if [[ -n "${COMPOSER:-}" ]]; then
     COMPOSER_BIN="$COMPOSER"
+elif [[ -x /opt/caddy/composer.phar ]]; then
+    COMPOSER_BIN="/opt/caddy/composer.phar"
 elif [[ -x /opt/caddy/bin/composer.phar ]]; then
     COMPOSER_BIN="/opt/caddy/bin/composer.phar"
 else
