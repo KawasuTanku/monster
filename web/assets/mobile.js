@@ -21,6 +21,13 @@
         content.innerHTML = html;
         sheet.classList.add('open');
         backdrop.classList.add('open');
+        // Re-bind any inline scripts in the sheet
+        content.querySelectorAll('script').forEach(oldScript => {
+            const newScript = document.createElement('script');
+            Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+            newScript.textContent = oldScript.textContent;
+            oldScript.parentNode.replaceChild(newScript, oldScript);
+        });
     }
     
     function closeSheet() {
@@ -29,6 +36,13 @@
     }
     
     backdrop.addEventListener('click', closeSheet);
+    
+    // Open a form (by element ID) into the bottom sheet
+    window.openFormInSheet = function(formId) {
+        const form = document.getElementById(formId);
+        if (!form) return;
+        openSheet(form.outerHTML);
+    };
     
     // Handle form submissions inside sheet via fetch
     content.addEventListener('submit', function(e) {
@@ -41,15 +55,18 @@
             body: formData,
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         }).then(r => r.text()).then(html => {
-            // If response is a redirect, follow it
-            if (html.includes('Location:')) {
-                window.location.href = html.match(/Location: (.+)/)[1];
-            } else {
-                closeSheet();
-                window.location.reload();
-            }
+            closeSheet();
+            window.location.reload();
         }).catch(err => {
             alert('Error: ' + err);
+        });
+    });
+    
+    // FAB button: open its target form in sheet
+    document.querySelectorAll('.fab').forEach(fab => {
+        fab.addEventListener('click', function() {
+            const target = this.getAttribute('data-form');
+            if (target) openFormInSheet(target);
         });
     });
     

@@ -11,7 +11,7 @@ use function Monster\trashIcon;
 <h1>Tabs</h1>
 <p class="muted">Customers who buy now, pay later. Charges count as revenue when the sale happens; payments settle the balance.</p>
 
-<section class="card">
+<section class="card inline-form" id="cust-form">
     <h2>New customer</h2>
     <form method="post" action="/tabs/new" class="form">
         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
@@ -49,3 +49,7 @@ use function Monster\trashIcon;
         </tbody>
     </table>
 <?php endif; ?>
+
+<button class="fab" data-form="cust-form" aria-label="Add customer">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>

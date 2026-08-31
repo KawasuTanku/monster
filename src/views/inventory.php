@@ -19,7 +19,7 @@ use function Monster\moneyClass;
     <div class="stat<?= $lowCount > 0 ? ' danger' : '' ?>"><div class="label">Low stock</div><div class="value"><?= $lowCount ?></div></div>
 </section>
 
-<form method="post" action="/inventory/save" class="card form">
+<form method="post" action="/inventory/save" class="card form inline-form" id="inv-form">
     <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
     <input type="hidden" name="id" value="<?= $edit ? e($edit->id) : '' ?>">
     <h2><?= $edit ? 'Edit item' : 'Add item' ?></h2>
@@ -116,3 +116,7 @@ use function Monster\moneyClass;
     </table>
     </div>
 <?php endif; ?>
+
+<button class="fab" data-form="inv-form" aria-label="Add item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>

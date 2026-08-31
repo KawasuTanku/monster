@@ -14,7 +14,7 @@ use function Monster\trashIcon;
 ?>
 <h1>Transactions</h1>
 
-<form method="post" action="/transactions/save" class="card form" id="txn-form">
+<form method="post" action="/transactions/save" class="card form inline-form" id="txn-form">
     <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
     <input type="hidden" name="id" value="<?= $edit ? e($edit->id) : '' ?>">
     <div class="row">
@@ -61,6 +61,10 @@ use function Monster\trashIcon;
         <?php if ($edit): ?><a class="btn" href="/transactions">Cancel</a><?php endif; ?>
     </div>
 </form>
+
+<button class="fab" data-form="txn-form" aria-label="Add transaction">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>
 <datalist id="cats">
     <option value="Wholesale">
     <option value="Shipping">

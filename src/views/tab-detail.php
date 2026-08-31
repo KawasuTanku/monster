@@ -31,9 +31,9 @@ use function Monster\trashIcon;
 </section>
 
 <div class="grid-2">
-<section class="card">
+<section class="card inline-form" id="charge-form-section">
     <h2>Add charge</h2>
-    <form method="post" action="/tabs/<?= e($customer->id) ?>/charge" class="form">
+    <form method="post" action="/tabs/<?= e($customer->id) ?>/charge" class="form" id="charge-form">
         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
         <div class="row">
             <label>Date
@@ -72,9 +72,9 @@ use function Monster\trashIcon;
     </form>
 </section>
 
-<section class="card">
+<section class="card inline-form" id="payment-form-section">
     <h2>Record payment</h2>
-    <form method="post" action="/tabs/<?= e($customer->id) ?>/payment" class="form">
+    <form method="post" action="/tabs/<?= e($customer->id) ?>/payment" class="form" id="payment-form">
         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
         <div class="row">
             <label>Date
@@ -159,3 +159,7 @@ use function Monster\trashIcon;
     <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
     <button type="submit" class="danger">Delete customer</button>
 </form>
+
+<button class="fab" data-form="charge-form-section" aria-label="Add charge or payment">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>
