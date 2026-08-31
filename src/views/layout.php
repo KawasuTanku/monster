@@ -29,6 +29,7 @@ use function Monster\e;
         <div class="sheet-handle"></div>
         <div id="sheet-content"></div>
     </div>
+    <div class="page-loader" id="page-loader"></div>
 <header class="topbar">
     <div class="brand">🧪 Monster <span class="sub">P&amp;L</span></div>
     <?php if ($user !== null): ?>

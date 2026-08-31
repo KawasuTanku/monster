@@ -125,7 +125,29 @@
     }
 }
 
-/* FAB */
+/* Page transitions */
+.container {
+    transition: opacity 0.2s ease;
+    opacity: 1;
+}
+.container.fading {
+    opacity: 0;
+}
+.page-loader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--accent);
+    transform-origin: left;
+    transform: scaleX(0);
+    z-index: 300;
+    transition: transform 0.3s ease;
+}
+.page-loader.loading {
+    transform: scaleX(1);
+}
 .fab {
     position: fixed;
     bottom: calc(5rem + env(safe-area-inset-bottom));

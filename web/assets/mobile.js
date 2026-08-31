@@ -21,7 +21,6 @@
         content.innerHTML = html;
         sheet.classList.add('open');
         backdrop.classList.add('open');
-        // Re-bind any inline scripts in the sheet
         content.querySelectorAll('script').forEach(oldScript => {
             const newScript = document.createElement('script');
             Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
@@ -37,14 +36,12 @@
     
     backdrop.addEventListener('click', closeSheet);
     
-    // Open a form (by element ID) into the bottom sheet
     window.openFormInSheet = function(formId) {
         const form = document.getElementById(formId);
         if (!form) return;
         openSheet(form.outerHTML);
     };
     
-    // Handle form submissions inside sheet via fetch
     content.addEventListener('submit', function(e) {
         const form = e.target;
         if (form.tagName !== 'FORM') return;
@@ -62,12 +59,36 @@
         });
     });
     
-    // FAB button: open its target form in sheet
     document.querySelectorAll('.fab').forEach(fab => {
         fab.addEventListener('click', function() {
             const target = this.getAttribute('data-form');
             if (target) openFormInSheet(target);
         });
+    });
+    
+    // Page transitions
+    const container = document.querySelector('.container');
+    const loader = document.getElementById('page-loader');
+    
+    function navigateTo(url) {
+        if (!container) { window.location.href = url; return; }
+        container.classList.add('fading');
+        loader.classList.add('loading');
+        setTimeout(() => {
+            window.location.href = url;
+        }, 200);
+    }
+    
+    document.querySelectorAll('.tabbar a').forEach(a => {
+        a.addEventListener('click', function(e) {
+            e.preventDefault();
+            const url = this.getAttribute('href');
+            navigateTo(url);
+        });
+    });
+    
+    window.addEventListener('popstate', function() {
+        window.location.reload();
     });
     
     // Pull-to-refresh
