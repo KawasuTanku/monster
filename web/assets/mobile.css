@@ -8,12 +8,11 @@
     .tabbar {
         display: flex;
         position: fixed;
-        bottom: 0;
+        bottom: env(safe-area-inset-bottom);
         left: 0;
         right: 0;
         background: var(--surface);
         border-top: 1px solid var(--border);
-        padding-bottom: env(safe-area-inset-bottom);
         z-index: 100;
     }
     .tabbar a {
@@ -32,7 +31,7 @@
     .tabbar a svg { width: 1.4rem; height: 1.4rem; }
     
     /* Content padding for bottom bar */
-    .container { padding-bottom: calc(4rem + env(safe-area-inset-bottom)); }
+    .container { padding-bottom: calc(4rem + env(safe-area-inset-bottom)); min-height: calc(100vh - 6rem); }
     
     /* Single-column cards */
     .cards { grid-template-columns: 1fr 1fr; gap: 0.6rem; }
