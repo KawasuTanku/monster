@@ -173,3 +173,9 @@
     .sheet .inline-form { display: block; }
     .container { padding-bottom: calc(8rem + env(safe-area-inset-bottom)); }
 }
+
+/* Desktop: hide tabbar and FAB */
+@media (min-width: 701px) {
+    .tabbar { display: none; }
+    .fab { display: none; }
+}
