@@ -76,10 +76,19 @@ use function Monster\trashIcon;
 
 <script>
 (function(){
-    var sel = document.getElementById('itemId');
-    var qty = document.getElementById('qty');
-    var form = document.getElementById('txn-form');
-    if (!sel || !qty || !form) return;
+    var script = document.currentScript;
+    var form = null;
+    if (script) {
+        var prev = script.previousElementSibling;
+        while (prev) {
+            if (prev.tagName === 'FORM') { form = prev; break; }
+            prev = prev.previousElementSibling;
+        }
+    }
+    if (!form) return;
+    var sel = form.querySelector('select[name="itemId"]');
+    var qty = form.querySelector('input[name="qty"]');
+    if (!sel || !qty) return;
     function refill(){
         var opt = sel.options[sel.selectedIndex];
         if (!opt || !opt.value) return;
