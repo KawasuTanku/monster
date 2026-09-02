@@ -76,20 +76,10 @@ use function Monster\trashIcon;
 
 <script>
 (function(){
-    var script = document.currentScript;
-    var form = null;
-    if (script) {
-        var prev = script.previousElementSibling;
-        while (prev) {
-            if (prev.tagName === 'FORM') { form = prev; break; }
-            prev = prev.previousElementSibling;
-        }
-    }
-    if (!form) return;
-    var sel = form.querySelector('select[name="itemId"]');
-    var qty = form.querySelector('input[name="qty"]');
-    if (!sel || !qty) return;
-    function refill(){
+    function refill(form) {
+        var sel = form.querySelector('select[name="itemId"]');
+        var qty = form.querySelector('input[name="qty"]');
+        if (!sel || !qty) return;
         var opt = sel.options[sel.selectedIndex];
         if (!opt || !opt.value) return;
         var n = Math.max(0, parseInt(qty.value || '1', 10) || 0);
@@ -103,8 +93,18 @@ use function Monster\trashIcon;
         }
         if (cat && cat.value.trim() === '') cat.value = isExpense ? 'Wholesale' : 'Retail';
     }
-    sel.addEventListener('change', refill);
-    qty.addEventListener('input', refill);
+    document.addEventListener('change', function(e) {
+        if (e.target.matches('select[name="itemId"]')) {
+            var form = e.target.closest('form');
+            if (form) refill(form);
+        }
+    });
+    document.addEventListener('input', function(e) {
+        if (e.target.matches('input[name="qty"]')) {
+            var form = e.target.closest('form');
+            if (form) refill(form);
+        }
+    });
 })();
 </script>
 

@@ -102,29 +102,29 @@ use function Monster\trashIcon;
 
 <script>
 (function(){
-    var script = document.currentScript;
-    var form = null;
-    if (script) {
-        var prev = script.previousElementSibling;
-        while (prev) {
-            if (prev.tagName === 'FORM') { form = prev; break; }
-            prev = prev.previousElementSibling;
-        }
-    }
-    if (!form) return;
-    var sel = form.querySelector('select[name="itemId"]');
-    var qty = form.querySelector('input[name="qty"]');
-    var amt = form.querySelector('input[name="amount"]');
-    if (!sel || !qty || !amt) return;
-    function refill(){
+    function refill(form) {
+        var sel = form.querySelector('select[name="itemId"]');
+        var qty = form.querySelector('input[name="qty"]');
+        var amt = form.querySelector('input[name="amount"]');
+        if (!sel || !qty || !amt) return;
         var opt = sel.options[sel.selectedIndex];
         if (!opt || !opt.value) return;
         var n = Math.max(0, parseInt(qty.value || '1', 10) || 0);
         var unit = parseFloat(opt.getAttribute('data-price'));
         if (!isNaN(unit)) amt.value = (unit * n).toFixed(2);
     }
-    sel.addEventListener('change', refill);
-    qty.addEventListener('input', refill);
+    document.addEventListener('change', function(e) {
+        if (e.target.matches('select[name="itemId"]')) {
+            var form = e.target.closest('form');
+            if (form) refill(form);
+        }
+    });
+    document.addEventListener('input', function(e) {
+        if (e.target.matches('input[name="qty"]')) {
+            var form = e.target.closest('form');
+            if (form) refill(form);
+        }
+    });
 })();
 </script>
 
