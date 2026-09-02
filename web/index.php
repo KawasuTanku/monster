@@ -117,6 +117,7 @@ if ($uri === '/login') {
             return view('login', ['title' => 'Sign in', 'error' => $msg, 'setup' => false]);
         }
         if ($app->auth->login($u, $_POST['pass'] ?? '')) {
+            $_SESSION['csrf'] = bin2hex(random_bytes(24)); // rotate token on login
             header('Location: /dashboard'); return;
         }
         return view('login', ['title' => 'Sign in', 'error' => 'Invalid credentials.', 'setup' => false]);
@@ -125,7 +126,9 @@ if ($uri === '/login') {
 }
 
 if ($uri === '/logout' && $method === 'POST') {
-    $app->auth->logout();
+    if (csrfValid($_POST['csrf'] ?? null)) {
+        $app->auth->logout();
+    }
     header('Location: /login'); return;
 }
 

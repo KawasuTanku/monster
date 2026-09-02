@@ -336,6 +336,7 @@ final class Auth
         $_SESSION[self::SESSION_KEY] = $username;
         $_SESSION[self::TS_LOGIN] = time();
         $_SESSION[self::TS_LAST] = time();
+        $_SESSION['csrf'] = bin2hex(random_bytes(24)); // rotate token on login
         return true;
     }
 
