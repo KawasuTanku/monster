@@ -598,7 +598,73 @@ $lockedStill = curl("$base/login", $jarL, 'POST', ['user' => 'john', 'pass' => '
 assertHas($lockedStill, 'Too many failed attempts', 'correct password rejected while locked');
 @unlink($jarL);
 
+// ---------------------------------------------------------------------------
+// API TESTS (before server shutdown)
+// ---------------------------------------------------------------------------
+echo "\nAPI TESTS\n";
+
+function curl_with_token(string $url, string $token): string {
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . $token,
+        'Accept: application/json',
+    ]);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    $out = curl_exec($ch);
+    curl_close($ch);
+    return (string) $out;
+}
+
+// Generate an API token first.
+$settingsPage = curl("$base/settings", $cookie);
+preg_match('/name="csrf" value="([^"]+)"/', $settingsPage, $m);
+$csrfSD = $m[1] ?? '';
+curl("$base/settings/api-token/regenerate", $cookie, 'POST', ['csrf' => $csrfSD]);
+// Read the token from the database directly.
+$pdoApi = new \PDO('sqlite:' . $root . '/data_test/db.sqlite');
+$rawToken = (string) $pdoApi->query("SELECT value FROM settings WHERE key = 'apiToken'")->fetchColumn();
+$apiToken = json_decode($rawToken, true) ?: $rawToken;
+assertHas($apiToken !== '' ? 'ok' : '', 'ok', 'API token generated');
+
+// Test 401 without token.
+$noAuth = curl_with_token("$base/api/stats", '');
+assertHas($noAuth, 'Unauthorized', 'API returns 401 without token');
+
+// Test 200 with token.
+$withAuth = curl_with_token("$base/api/stats", $apiToken);
+assertHas($withAuth, 'low_stock_count', 'API /stats returns JSON with low_stock_count');
+
+// Test /api/inventory.
+$invApi = curl_with_token("$base/api/inventory", $apiToken);
+assertHas($invApi, 'items', 'API /inventory returns items array');
+assertHas($invApi, 'meta', 'API /inventory returns meta object');
+
+// Test /api/inventory/low.
+$lowApi = curl_with_token("$base/api/inventory/low", $apiToken);
+assertHas($lowApi, 'items', 'API /inventory/low returns items array');
+
+// Test /api/report/summary.
+$sumApi = curl_with_token("$base/api/report/summary", $apiToken);
+assertHas($sumApi, 'revenue', 'API /report/summary returns revenue');
+assertHas($sumApi, 'expenses', 'API /report/summary returns expenses');
+assertHas($sumApi, 'net', 'API /report/summary returns net');
+
+// Test /api/report/monthly.
+$monApi = curl_with_token("$base/api/report/monthly", $apiToken);
+assertHas($monApi, 'months', 'API /report/monthly returns months array');
+
+// Test /api/inventory/:id.
+$invItem = curl("$base/inventory", $cookie);
+preg_match('/href="\/inventory\?edit=([^"]+)"/', $invItem, $mInv);
+$invId = $mInv[1] ?? '';
+if ($invId !== '') {
+    $itemApi = curl_with_token("$base/api/inventory/" . $invId, $apiToken);
+    assertHas($itemApi, 'item', 'API /api/inventory/:id returns item object');
+}
+
 proc_terminate($proc);
+
 rmrf($root . '/data');
 foreach (glob($testData . '/*') ?: [] as $f) {
     if (is_file($f)) { @unlink($f); }
@@ -606,8 +672,6 @@ foreach (glob($testData . '/*') ?: [] as $f) {
 @rmdir($testData . '/backups');
 @rmdir($testData);
 @unlink($cookie);
-
-echo $failed ? "\nSMOKE TEST FAILED\n" : "\nSMOKE TEST PASSED\n";
 
 // ---------------------------------------------------------------------------
 // Legacy migration sub-test: a db.json from the single-user era (settings.user /

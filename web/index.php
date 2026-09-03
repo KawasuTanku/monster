@@ -35,6 +35,7 @@ if (session_status() === PHP_SESSION_NONE) {
 // setting them once at boot would pin the 'secure' flag to the first request.
 use Monster\InventoryRepository;
 use function Monster\e;
+use function Monster\jsonResponse;
 use function Monster\csrfToken;
 use function Monster\csrfValid;
 use function Monster\setFlash;
@@ -51,8 +52,16 @@ $GLOBALS['app'] = $app;
  * once per hit; in FrankenPHP worker mode the app boots once and this is called
  * once per request, reusing the same $app (and its SQLite PDO connection).
  */
-function handle_request(\Monster\App $app)
+function handle_request(Monster\App $app)
 {
+// ---- API routes (read-only, bearer <REDACTED> auth) ----
+$apiUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+if (str_starts_with($apiUri, '/api/')) {
+    $apiMethod = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+    handle_api_request($app, $apiUri, $apiMethod);
+    return;
+}
+
 // Hardened session cookie defaults. MUST run before the first session_start()
 // within a request (which happens the moment a view calls csrfToken()/takeFlash(),
 // often while rendering a form) — otherwise the session is created with PHP's
@@ -434,6 +443,7 @@ if ($uri === '/settings') {
             'coverageDays' => (int) ($app->storage->getSetting('coverageDays') ?? 30),
             'lookbackDays' => (int) ($app->storage->getSetting('lookbackDays') ?? 30),
         ],
+        'apiToken' => (string) ($app->storage->getSetting('apiToken') ?? ''),
     ]);
 }
 
@@ -483,6 +493,16 @@ if ($uri === '/settings/restock-defaults' && $method === 'POST') {
         $app->storage->setSetting('coverageDays', $coverageDays);
         $app->storage->setSetting('lookbackDays', $lookbackDays);
         setFlash('Restock defaults saved.');
+    }
+    header('Location: /settings'); return;
+}
+
+if ($uri === '/settings/api-token/regenerate' && $method === 'POST') {
+    if (!$isAdmin) { http_response_code(403); header('Location: /settings'); return; }
+    if (csrfValid($_POST['csrf'] ?? null)) {
+        $token = bin2hex(random_bytes(32));
+        $app->storage->setSetting('apiToken', $token);
+        setFlash('API token regenerated.');
     }
     header('Location: /settings'); return;
 }
@@ -891,6 +911,152 @@ if (function_exists('frankenphp_handle_request')) {
     });
 } else {
     handle_request($app);
+}
+
+/**
+ * Dispatch read-only API routes. Bearer <REDACTED> auth, JSON responses.
+ */
+function handle_api_request(Monster\App $app, string $uri, string $method): void
+{
+    $token = (string) ($app->storage->getSetting('apiToken') ?? '');
+    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    $provided = preg_match('/^Bearer\s+(\S+)$/i', $authHeader, $m) ? $m[1] : '';
+
+    if ($token === '' || !hash_equals($token, $provided)) {
+        echo jsonResponse(['error' => 'Unauthorized'], 401);
+        return;
+    }
+
+    if ($method !== 'GET') {
+        echo jsonResponse(['error' => 'Method not allowed'], 405);
+        return;
+    }
+
+    // GET /api/inventory
+    if ($uri === '/api/inventory') {
+        echo jsonResponse(buildInventoryPayload($app, false));
+        return;
+    }
+
+    // GET /api/inventory/low
+    if ($uri === '/api/inventory/low') {
+        echo jsonResponse(buildInventoryPayload($app, true));
+        return;
+    }
+
+    // GET /api/inventory/:id
+    if (preg_match('#^/api/inventory/([a-zA-Z0-9_-]+)$#', $uri, $m)) {
+        $item = $app->inv->find($m[1]);
+        if ($item === null) {
+            echo jsonResponse(['error' => 'Not found'], 404);
+            return;
+        }
+        echo jsonResponse(['item' => serializeInventoryItem($app, $item)]);
+        return;
+    }
+
+    // GET /api/report/summary
+    if ($uri === '/api/report/summary') {
+        echo jsonResponse($app->txns->summary());
+        return;
+    }
+
+    // GET /api/report/monthly
+    if ($uri === '/api/report/monthly') {
+        echo jsonResponse(['months' => $app->txns->roiSeries()]);
+        return;
+    }
+
+    // GET /api/stats
+    if ($uri === '/api/stats') {
+        $safetyDays = (int) ($app->storage->getSetting('safetyDays') ?? 7);
+        $lookbackDays = (int) ($app->storage->getSetting('lookbackDays') ?? 30);
+        $now = time();
+        $lowCount = 0;
+        foreach ($app->inv->all() as $item) {
+            if ($item->discontinued) continue;
+            $u = $app->txns->unitsSoldSince($item->id, $now - ($lookbackDays * 86400));
+            if ($item->needsReorder($u, $lookbackDays, $safetyDays)) {
+                $lowCount++;
+            }
+        }
+        $recentCount = 0;
+        $weekAgo = $now - (7 * 86400);
+        foreach ($app->txns->all() as $t) {
+            if ($t->createdAt >= $weekAgo) $recentCount++;
+        }
+        echo jsonResponse([
+            'low_stock_count' => $lowCount,
+            'total_stock_value' => $app->inv->totalStockValue(),
+            'recent_transactions_7d' => $recentCount,
+        ]);
+        return;
+    }
+
+    echo jsonResponse(['error' => 'Not found'], 404);
+}
+
+/**
+ * Build the inventory payload for /api/inventory and /api/inventory/low.
+ * @return array{items: list<array<string, mixed>>, meta: array{count: int, low_count: int, total_stock_value: float}}
+ */
+function buildInventoryPayload(Monster\App $app, bool $lowOnly): array
+{
+    $safetyDays = (int) ($app->storage->getSetting('safetyDays') ?? 7);
+    $coverageDays = (int) ($app->storage->getSetting('coverageDays') ?? 30);
+    $lookbackDays = (int) ($app->storage->getSetting('lookbackDays') ?? 30);
+    $now = time();
+
+    $items = [];
+    $lowCount = 0;
+    $totalStockValue = 0.0;
+
+    foreach ($app->inv->all() as $item) {
+        $u = $app->txns->unitsSoldSince($item->id, $now - ($lookbackDays * 86400));
+        $needsReorder = $item->needsReorder($u, $lookbackDays, $safetyDays);
+        if ($needsReorder) $lowCount++;
+        if ($lowOnly && !$needsReorder) continue;
+        $totalStockValue += $item->stockValue();
+        $items[] = serializeInventoryItem($app, $item);
+    }
+
+    return [
+        'items' => $items,
+        'meta' => [
+            'count' => count($items),
+            'low_count' => $lowCount,
+            'total_stock_value' => round($totalStockValue, 2),
+        ],
+    ];
+}
+
+/**
+ * Serialize a single inventory item with computed velocity metrics.
+ * @return array<string, mixed>
+ */
+function serializeInventoryItem(Monster\App $app, Monster\InventoryItem $item): array
+{
+    $safetyDays = (int) ($app->storage->getSetting('safetyDays') ?? 7);
+    $coverageDays = (int) ($app->storage->getSetting('coverageDays') ?? 30);
+    $lookbackDays = (int) ($app->storage->getSetting('lookbackDays') ?? 30);
+    $now = time();
+    $u = $app->txns->unitsSoldSince($item->id, $now - ($lookbackDays * 86400));
+
+    return [
+        'id' => $item->id,
+        'name' => $item->name,
+        'variant' => $item->variant,
+        'sku' => $item->sku,
+        'qty_on_hand' => $item->qtyOnHand,
+        'unit_cost' => $item->unitCost,
+        'unit_price' => $item->unitPrice,
+        'stock_value' => $item->stockValue(),
+        'velocity_per_day' => $item->salesVelocity($u, $lookbackDays),
+        'days_of_stock' => is_finite($item->daysOfStock($u, $lookbackDays)) ? $item->daysOfStock($u, $lookbackDays) : null,
+        'reorder_point' => $item->reorderAt > 0 ? $item->reorderAt : $item->dynamicReorderPoint($u, $lookbackDays, $safetyDays),
+        'needs_reorder' => $item->needsReorder($u, $lookbackDays, $safetyDays),
+        'discontinued' => $item->discontinued,
+    ];
 }
 
 /**

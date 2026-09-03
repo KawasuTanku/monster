@@ -18,6 +18,14 @@ function money(float $value): string
     return number_format($value, 2, '.', ',');
 }
 
+/** Send a JSON response with the given status code. */
+function jsonResponse(array $data, int $status = 200): string
+{
+    http_response_code($status);
+    header('Content-Type: application/json; charset=utf-8');
+    return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+}
+
 /** Color class for a signed value (positive => good, negative => bad). */
 function moneyClass(float $value): string
 {

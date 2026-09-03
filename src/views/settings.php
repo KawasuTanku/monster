@@ -75,3 +75,15 @@ use function Monster\csrfToken;
     </form>
 </section>
 <?php endif; ?>
+
+<?php if ($isAdmin): ?>
+<section class="card">
+    <h2>API token</h2>
+    <p class="muted">Bearer <REDACTED> for read-only API access. Send as <code>Authorization: Bearer &lt;token&gt;</code>.</p>
+    <p class="muted">Current token: <code><?= e($apiToken ? substr($apiToken, 0, 8) . '...' : 'not set') ?></code></p>
+    <form method="post" action="/settings/api-token/regenerate" class="form">
+        <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
+        <div class="actions"><button type="submit">Regenerate token</button></div>
+    </form>
+</section>
+<?php endif; ?>
