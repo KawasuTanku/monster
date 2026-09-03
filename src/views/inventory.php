@@ -47,6 +47,9 @@ use function Monster\moneyClass;
         <label>Reorder at
             <input type="number" min="0" step="1" name="reorderAt" value="<?= $edit ? e((string) $edit->reorderAt) : '0' ?>" placeholder="low-stock threshold">
         </label>
+        <label>Discontinued
+            <input type="checkbox" name="discontinued" value="1" <?= $edit && $edit->discontinued ? 'checked' : '' ?>>
+        </label>
     </div>
     <div class="row">
         <label class="wide">Supplier
@@ -64,13 +67,21 @@ use function Monster\moneyClass;
 <?php else: ?>
     <div class="table-wrap">
     <table class="table">
-        <thead><tr><th>Name</th><th>Variant</th><th class="num">Qty</th><th class="num">Cost</th><th class="num">Price</th><th class="num">Stock $</th><th class="num">Revenue</th><th class="num">COGS</th><th class="num">Profit</th><th class="num">Restock Qty</th><th class="num">Restock Cost</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Variant</th><th class="num">Qty</th><th class="num">Cost</th><th class="num">Price</th><th class="num">Stock $</th><th class="num">Revenue</th><th class="num">COGS</th><th class="num">Profit</th><th class="num">Days</th><th class="num">Vel.</th><th class="num">Reorder at</th><th class="num">Order qty</th><th class="num">Restock Cost</th><th></th></tr></thead>
         <tbody>
         <?php foreach ($items as $i): ?>
-            <tr<?= $i->isLow() ? ' class="low"' : '' ?>>
-                <td data-label="Name"><?= e($i->name) ?><?= $i->sku !== '' ? ' <span class="muted">(' . e($i->sku) . ')</span>' : '' ?></td>
+            <?php
+            $u = $unitsSold[$i->id] ?? 0;
+            $daysOfStock = $i->daysOfStock($u, $lookbackDays);
+            $velocity = $i->salesVelocity($u, $lookbackDays);
+            $suggestedQty = $i->suggestedRestockQty($u, $lookbackDays, $safetyDays, $coverageDays);
+            $needsReorder = $i->needsReorder($u, $lookbackDays, $safetyDays);
+            $restockQty = $i->reorderAt > 0 ? $i->reorderQty() : $suggestedQty;
+            ?>
+            <tr<?= $needsReorder ? ' class="low"' : '' ?>>
+                <td data-label="Name"><?= e($i->name) ?><?= $i->sku !== '' ? ' <span class="muted">(' . e($i->sku) . ')</span>' : '' ?><?= $i->discontinued ? ' <span class="muted">(discontinued)</span>' : '' ?></td>
                 <td class="muted" data-label="Variant"><?= e($i->variant) ?></td>
-                <td class="num" data-label="Qty"><?= e((string) $i->qtyOnHand) ?><?= $i->isLow() ? ' ⚠' : '' ?></td>
+                <td class="num" data-label="Qty"><?= e((string) $i->qtyOnHand) ?><?= $needsReorder ? ' ⚠' : '' ?></td>
                 <td class="num" data-label="Cost">$<?= money($i->unitCost) ?></td>
                 <td class="num" data-label="Price">$<?= money($i->unitPrice) ?></td>
                 <td class="num" data-label="Stock $">$<?= money($i->stockValue()) ?></td>
@@ -78,10 +89,11 @@ use function Monster\moneyClass;
                 <td class="num" data-label="Revenue"><?= $p ? '$' . money($p['revenue']) : '—' ?></td>
                 <td class="num" data-label="COGS"><?= $p ? '$' . money($p['cogs']) : '—' ?></td>
                 <td class="num <?= $p ? moneyClass($p['net']) : '' ?>" data-label="Profit"><strong><?= $p ? '$' . money($p['net']) : '—' ?></strong></td>
+                <td class="num" data-label="Days"><?= is_finite($daysOfStock) ? $daysOfStock . 'd' : '—' ?></td>
+                <td class="num" data-label="Vel."><?= $velocity > 0 ? number_format($velocity, 2) . '/d' : '—' ?></td>
+                <td class="num" data-label="Reorder at"><?= $i->reorderAt > 0 ? e((string) $i->reorderAt) : ($i->dynamicReorderPoint($u, $lookbackDays, $safetyDays) > 0 ? e((string) $i->dynamicReorderPoint($u, $lookbackDays, $safetyDays)) . ' (auto)' : '—') ?></td>
+                <td class="num" data-label="Order qty"><?= $restockQty > 0 ? e((string) $restockQty) : '—' ?></td>
                 <?php $rf = 'restock-' . e($i->id); ?>
-                <td class="num restock-qty">
-                    <input type="number" min="1" step="1" name="qty" form="<?= $rf ?>" value="12" class="qty" title="Restock quantity" aria-label="Restock quantity">
-                </td>
                 <td class="num restock-cost">
                     <input type="number" min="0" step="0.01" name="cost" form="<?= $rf ?>" value="<?= money($i->unitCost) ?>" class="cost" title="Cost per can for this restock (defaults to current cost)" aria-label="Restock cost per can">
                 </td>
@@ -102,6 +114,7 @@ use function Monster\moneyClass;
                     <form id="<?= $rf ?>" method="post" action="/inventory/restock" class="inline restock">
                         <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
                         <input type="hidden" name="id" value="<?= e($i->id) ?>">
+                        <input type="hidden" name="qty" value="<?= e((string) $restockQty) ?>">
                         <button type="submit" class="link" title="Restock & log cost">restock</button>
                     </form>
                     <form method="post" action="/inventory/delete" class="inline">

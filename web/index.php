@@ -153,8 +153,25 @@ if ($uri === '/' || $uri === '/dashboard') {
             $receivables += $bal;
         }
     }
+    // Global restock defaults from settings.
+    $safetyDays = (int) ($app->storage->getSetting('safetyDays') ?? 7);
+    $coverageDays = (int) ($app->storage->getSetting('coverageDays') ?? 30);
+    $lookbackDays = (int) ($app->storage->getSetting('lookbackDays') ?? 30);
+
+    // Units sold per item over the lookback window.
+    $unitsSoldMap = [];
+    $now = time();
+    foreach ($app->inv->all() as $item) {
+        $since = $now - ($lookbackDays * 86400);
+        $unitsSoldMap[$item->id] = $app->txns->unitsSoldSince($item->id, $since);
+    }
+
+    // Low stock items (excluding discontinued) for the dashboard warning.
+    $lowItems = array_filter($app->inv->all(), fn($i) => !$i->discontinued && $i->needsReorder($unitsSoldMap[$i->id] ?? 0, $lookbackDays, $safetyDays));
+
     return view('dashboard', [
         'title' => 'Dashboard', 'user' => $user, 'summary' => $summary, 'recent' => $recent, 'stockValue' => $app->inv->totalStockValue(), 'receivables' => round($receivables, 2),
+        'lowItems' => $lowItems,
     ]);
 }
 
@@ -309,12 +326,34 @@ if ($uri === '/report') {
 }
 
 if ($uri === '/report/reorder' && $method === 'GET') {
-    // Items at or below their reorder threshold, with a suggested restock qty.
-    $low = $app->inv->lowStock();
+    // Items needing reorder: either manual reorderAt triggered OR velocity-based.
+    $safetyDays = (int) ($app->storage->getSetting('safetyDays') ?? 7);
+    $coverageDays = (int) ($app->storage->getSetting('coverageDays') ?? 30);
+    $lookbackDays = (int) ($app->storage->getSetting('lookbackDays') ?? 30);
+    $now = time();
+
+    $reorderItems = [];
+    $unitsSold = [];
+    foreach ($app->inv->all() as $item) {
+        if ($item->discontinued) {
+            continue;
+        }
+        $since = $now - ($lookbackDays * 86400);
+        $u = $app->txns->unitsSoldSince($item->id, $since);
+        $unitsSold[$item->id] = $u;
+        if ($item->needsReorder($u, $lookbackDays, $safetyDays)) {
+            $reorderItems[] = $item;
+        }
+    }
+
     return view('reorder', [
         'title' => 'Needs Reorder', 'user' => $user, 'isAdmin' => $isAdmin,
-        'items' => $low,
-        'totalCost' => round(array_sum(array_map(static fn(InventoryItem $i): float => $i->reorderQty() * $i->unitCost, $low)), 2),
+        'items' => $reorderItems,
+        'totalCost' => round(array_sum(array_map(static fn(InventoryItem $i): float => $i->reorderQty() * $i->unitCost, $reorderItems)), 2),
+        'unitsSold' => $unitsSold,
+        'safetyDays' => $safetyDays,
+        'coverageDays' => $coverageDays,
+        'lookbackDays' => $lookbackDays,
     ]);
 }
 
@@ -731,6 +770,19 @@ if ($uri === '/inventory') {
     if (isset($_GET['edit'])) {
         $edit = $app->inv->find($_GET['edit']);
     }
+    // Global restock defaults from settings.
+    $safetyDays = (int) ($app->storage->getSetting('safetyDays') ?? 7);
+    $coverageDays = (int) ($app->storage->getSetting('coverageDays') ?? 30);
+    $lookbackDays = (int) ($app->storage->getSetting('lookbackDays') ?? 30);
+
+    // Units sold per item over the lookback window.
+    $unitsSoldMap = [];
+    $now = time();
+    foreach ($app->inv->all() as $item) {
+        $since = $now - ($lookbackDays * 86400);
+        $unitsSoldMap[$item->id] = $app->txns->unitsSoldSince($item->id, $since);
+    }
+
     return view('inventory', [
         'title' => 'Inventory', 'user' => $user, 'isAdmin' => $isAdmin,
         'items' => $app->inv->all(),
@@ -738,6 +790,10 @@ if ($uri === '/inventory') {
         'totalValue' => $app->inv->totalStockValue(),
         'lowCount' => count($app->inv->lowStock()),
         'pnl' => $app->txns->perItemPnl(),
+        'unitsSold' => $unitsSoldMap,
+        'safetyDays' => $safetyDays,
+        'coverageDays' => $coverageDays,
+        'lookbackDays' => $lookbackDays,
     ]);
 }
 
@@ -756,6 +812,7 @@ if ($uri === '/inventory/save' && $method === 'POST') {
         $item->unitCost = (float) ($_POST['unitCost'] ?? 0);
         $item->unitPrice = (float) ($_POST['unitPrice'] ?? 0);
         $item->reorderAt = (int) ($_POST['reorderAt'] ?? 0);
+        $item->discontinued = isset($_POST['discontinued']) && $_POST['discontinued'] === '1';
         $item->supplier = trim($_POST['supplier'] ?? '');
         if ($item->name !== '') {
             $app->inv->save($item);

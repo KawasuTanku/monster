@@ -31,6 +31,13 @@ use function Monster\moneyClass;
     </div>
 </section>
 
+<?php if (!empty($lowItems)): ?>
+<section class="card">
+    <h2>⚠ Low Stock</h2>
+    <p><?= count($lowItems) ?> item(s) need reordering. <a href="/inventory">View details →</a></p>
+</section>
+<?php endif; ?>
+
 <h2>By category</h2>
 <?php if (empty($summary['by_category'])): ?>
     <p class="muted">No transactions yet.</p>
