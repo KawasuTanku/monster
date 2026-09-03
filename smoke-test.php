@@ -383,7 +383,7 @@ $invAfter = curl("$base/inventory", $cookie);
 assertHas($invAfter, '(ED-ORG)', 'inventory item listed after add');
 assertHas($invAfter, '$42.00', 'stock value = 3 x 14 = 42');
 // Grab the item id for later restock + linked-sale tests.
-preg_match('/href="\/inventory\?edit=([^"]+)"/', $invAfter, $mi);
+preg_match('/ED-ORG\).*?href="\/inventory\?edit=([^"]+)"/s', $invAfter, $mi);
 $invId = $mi[1] ?? '';
 // Drop below threshold via -1 adjust, expect low-stock flag.
 curl("$base/inventory/adjust", $cookie, 'POST', ['csrf' => $csrfInv, 'id' => $invId, 'delta' => '-1']);
@@ -440,6 +440,76 @@ curl("$base/inventory/delete", $cookie, 'POST', ['csrf' => $csrfInv, 'id' => $in
 $invDel = curl("$base/inventory", $cookie);
 assertMissing($invDel, '(ED-ORG)', 'inventory item removed after delete');
 
+// 13) VELOCITY-BASED REORDER: item with sales velocity should compute dynamic reorder point.
+$invPage = curl("$base/inventory", $cookie);
+preg_match('/name="csrf" value="([^"]+)"/', $invPage, $m);
+$csrfInv3 = $m[1] ?? '';
+// Add an item with 0 reorderAt (so velocity-based logic applies).
+curl("$base/inventory/save", $cookie, 'POST', [
+    'csrf' => $csrfInv3, 'id' => '', 'name' => 'Velocity', 'variant' => 'test',
+    'sku' => 'ED-VEL', 'qtyOnHand' => '10', 'unitCost' => '14.00', 'unitPrice' => '24.00',
+    'reorderAt' => '0', 'supplier' => 'Acme',
+]);
+$invVel = curl("$base/inventory", $cookie);
+preg_match('/href="\/inventory\?edit=([^"]+)"/', $invVel, $miVel);
+$invIdVel = $miVel[1] ?? '';
+// Record 5 sales of 2 cans each (10 units total) over the lookback window.
+$txnPage = curl("$base/transactions", $cookie);
+preg_match('/name="csrf" value="([^"]+)"/', $txnPage, $mTV);
+$csrfTV = $mTV[1] ?? '';
+for ($n = 0; $n < 5; $n++) {
+    curl("$base/transactions/save", $cookie, 'POST', [
+        'csrf' => $csrfTV, 'id' => '', 'type' => 'sale', 'amount' => '48.00',
+        'date' => '2026-08-15', 'category' => 'Retail', 'note' => 'velocity test ' . $n,
+        'itemId' => $invIdVel, 'qty' => '2',
+    ]);
+}
+// Velocity = 10 units / 30 days = 0.333/d. With safetyDays=7, reorder point = ceil(0.333*7) = 3.
+// qtyOnHand=10 > 3, so NOT low yet.
+$invVel2 = curl("$base/inventory", $cookie);
+assertHas($invVel2, '(ED-VEL)', 'velocity item listed after add');
+// Drop stock to 3 via adjust (10 -> 3).
+curl("$base/inventory/adjust", $cookie, 'POST', ['csrf' => $csrfInv3, 'id' => $invIdVel, 'delta' => '-7']);
+$invVel3 = curl("$base/inventory", $cookie);
+// Now qtyOnHand=3 <= reorder point=3, should be flagged low.
+assertHas($invVel3, 'low', 'velocity-based reorder flags item low when stock <= dynamic reorder point');
+
+// 14) DISCONTINUED: item marked discontinued should be excluded from low stock.
+$invPage = curl("$base/inventory", $cookie);
+preg_match('/name="csrf" value="([^"]+)"/', $invPage, $m);
+$csrfInv4 = $m[1] ?? '';
+curl("$base/inventory/save", $cookie, 'POST', [
+    'csrf' => $csrfInv4, 'id' => '', 'name' => 'Discontinued', 'variant' => 'test',
+    'sku' => 'ED-DIS', 'qtyOnHand' => '1', 'unitCost' => '14.00', 'unitPrice' => '24.00',
+    'reorderAt' => '5', 'supplier' => 'Acme',
+]);
+$invDis = curl("$base/inventory", $cookie);
+preg_match('/href="\/inventory\?edit=([^"]+)"/', $invDis, $miDis);
+$invIdDis = $miDis[1] ?? '';
+// Edit to mark discontinued.
+curl("$base/inventory/save", $cookie, 'POST', [
+    'csrf' => $csrfInv4, 'id' => $invIdDis, 'name' => 'Discontinued', 'variant' => 'test',
+    'sku' => 'ED-DIS', 'qtyOnHand' => '1', 'unitCost' => '14.00', 'unitPrice' => '24.00',
+    'reorderAt' => '5', 'supplier' => 'Acme', 'discontinued' => '1',
+]);
+// Low stock count should NOT include the discontinued item.
+$invDis2 = curl("$base/inventory", $cookie);
+assertHas($invDis2, '(discontinued)', 'discontinued item flagged in inventory');
+// Reorder report should exclude discontinued items.
+$reorderPage = curl("$base/report/reorder", $cookie);
+assertMissing($reorderPage, 'ED-DIS', 'discontinued item excluded from reorder report');
+
+// 15) GLOBAL DEFAULTS: save restock defaults and verify they persist.
+$settingsPage = curl("$base/settings", $cookie);
+preg_match('/name="csrf" value="([^"]+)"/', $settingsPage, $mSD);
+$csrfSD = $mSD[1] ?? '';
+curl("$base/settings/restock-defaults", $cookie, 'POST', [
+    'csrf' => $csrfSD, 'safetyDays' => '14', 'coverageDays' => '60', 'lookbackDays' => '14',
+]);
+$settingsPage2 = curl("$base/settings", $cookie);
+assertHas($settingsPage2, '14', 'restock defaults saved (safetyDays=14)');
+assertHas($settingsPage2, '60', 'restock defaults saved (coverageDays=60)');
+
 // 16) TABS: create customer, add charge (linked to item), verify stock decrement + balance.
 $tabsPage = curl("$base/tabs", $cookie);
 assertHas($tabsPage, 'Tabs', 'admin can reach /tabs');
@@ -462,7 +532,8 @@ $saveResp2 = curl("$base/inventory/save", $cookie, 'POST', [
     'reorderAt' => '5', 'supplier' => 'Acme',
 ]);
 $invAfter2 = curl("$base/inventory", $cookie);
-preg_match('/href="\/inventory\?edit=([^"]+)"/', $invAfter2, $mi2);
+// Match the edit link for the specific SKU cell, not just the first edit link on the page.
+preg_match('/ED-ORG2.*?href="\/inventory\?edit=([^"]+)"/s', $invAfter2, $mi2);
 $invId2 = $mi2[1] ?? '';
 // Charge 3 cans at $24 = $72.
 $tabDetail = curl("$base/tabs/" . $custId, $cookie);
