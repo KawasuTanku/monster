@@ -69,7 +69,7 @@ final class InventoryRepository
     /** Items at or below their reorder threshold. @return list<InventoryItem> */
     public function lowStock(): array
     {
-        return array_values(array_filter($this->all(), static fn(InventoryItem $i): bool => $i->isLow()));
+        return array_values(array_filter($this->all(), static fn(InventoryItem $i): bool => !$i->discontinued && $i->isLow()));
     }
 
     /** Total capital tied up across all on-hand stock. */
