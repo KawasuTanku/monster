@@ -112,4 +112,75 @@ final class InventoryItem
     {
         return round($this->unitPrice - $this->unitCost, 2);
     }
+
+    /**
+     * Units sold per day over the lookback window. Pure: caller passes in
+     * the precomputed unit count (so we don't reach into the DB).
+     */
+    public function salesVelocity(int $unitsSoldInWindow, int $lookbackDays): float
+    {
+        if ($lookbackDays <= 0) {
+            return 0.0;
+        }
+        return round($unitsSoldInWindow / $lookbackDays, 4);
+    }
+
+    /** Days of stock remaining at current sales velocity (INF if no velocity). */
+    public function daysOfStock(int $unitsSoldInWindow, int $lookbackDays): float
+    {
+        $v = $this->salesVelocity($unitsSoldInWindow, $lookbackDays);
+        if ($v <= 0.0) {
+            return INF;
+        }
+        return round($this->qtyOnHand / $v, 1);
+    }
+
+    /**
+     * Dynamic reorder point: ceil(velocity × safetyDays).
+     * Returns 0 if no sales data (can't compute).
+     */
+    public function dynamicReorderPoint(int $unitsSoldInWindow, int $lookbackDays, int $safetyDays): int
+    {
+        $v = $this->salesVelocity($unitsSoldInWindow, $lookbackDays);
+        if ($v <= 0.0) {
+            return 0;
+        }
+        return (int) ceil($v * $safetyDays);
+    }
+
+    /**
+     * True if item should be reordered: either manual reorderAt triggered
+     * OR velocity-based reorder point triggered. Discontinued items never reorder.
+     */
+    public function needsReorder(int $unitsSoldInWindow, int $lookbackDays, int $safetyDays): bool
+    {
+        if ($this->discontinued) {
+            return false;
+        }
+        if ($this->reorderAt > 0) {
+            return $this->qtyOnHand <= $this->reorderAt;
+        }
+        $rop = $this->dynamicReorderPoint($unitsSoldInWindow, $lookbackDays, $safetyDays);
+        return $rop > 0 && $this->qtyOnHand <= $rop;
+    }
+
+    /**
+     * Suggested restock quantity: ceil(velocity × coverageDays).
+     * Falls back to manual reorderQty if reorderAt is set.
+     * Returns 0 for discontinued items or items with no sales data.
+     */
+    public function suggestedRestockQty(int $unitsSoldInWindow, int $lookbackDays, int $safetyDays, int $coverageDays): int
+    {
+        if ($this->discontinued) {
+            return 0;
+        }
+        if ($this->reorderAt > 0) {
+            return $this->reorderQty(); // legacy path
+        }
+        $v = $this->salesVelocity($unitsSoldInWindow, $lookbackDays);
+        if ($v <= 0.0) {
+            return 0;
+        }
+        return max(1, (int) ceil($v * $coverageDays));
+    }
 }
