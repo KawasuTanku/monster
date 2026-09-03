@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS inventory (
     unitCost    REAL NOT NULL DEFAULT 0,
     unitPrice   REAL NOT NULL DEFAULT 0,
     reorderAt   INTEGER NOT NULL DEFAULT 0,
+    discontinued INTEGER NOT NULL DEFAULT 0,
     supplier    TEXT NOT NULL DEFAULT '',
     createdAt   INTEGER NOT NULL DEFAULT 0,
     updatedAt   INTEGER NOT NULL DEFAULT 0
@@ -142,6 +143,19 @@ SQL);
             $this->pdo->exec('ALTER TABLE transactions ADD COLUMN customerId TEXT NOT NULL DEFAULT \'\'');
         }
 
+        // Idempotent migration: add discontinued to inventory if missing.
+        $cols = $this->pdo->query('PRAGMA table_info(inventory)')->fetchAll();
+        $hasDiscontinued = false;
+        foreach ($cols as $col) {
+            if ($col['name'] === 'discontinued') {
+                $hasDiscontinued = true;
+                break;
+            }
+        }
+        if (!$hasDiscontinued) {
+            $this->pdo->exec('ALTER TABLE inventory ADD COLUMN discontinued INTEGER NOT NULL DEFAULT 0');
+        }
+
         // Import a legacy JSON store if present and the DB is empty.
         $legacyJson = dirname($this->file) . '/db.json';
         if (is_file($legacyJson) && $this->isEmpty()) {
@@ -179,7 +193,7 @@ SQL);
     public function loadDump(array $dump): void
     {
         $txCols = ['id', 'type', 'amount', 'category', 'note', 'date', 'createdAt', 'itemId', 'qty', 'customerId'];
-        $invCols = ['id', 'sku', 'name', 'variant', 'qtyOnHand', 'unitCost', 'unitPrice', 'reorderAt', 'supplier', 'createdAt', 'updatedAt'];
+        $invCols = ['id', 'sku', 'name', 'variant', 'qtyOnHand', 'unitCost', 'unitPrice', 'reorderAt', 'discontinued', 'supplier', 'createdAt', 'updatedAt'];
         $userCols = ['id', 'username', 'password_hash', 'role', 'createdAt'];
         $custCols = ['id', 'name', 'note', 'createdAt'];
         $payCols = ['id', 'customerId', 'amount', 'date', 'note', 'createdAt'];
@@ -236,7 +250,7 @@ SQL);
         }
 
         $txCols = ['id', 'type', 'amount', 'category', 'note', 'date', 'createdAt', 'itemId', 'qty', 'customerId'];
-        $invCols = ['id', 'sku', 'name', 'variant', 'qtyOnHand', 'unitCost', 'unitPrice', 'reorderAt', 'supplier', 'createdAt', 'updatedAt'];
+        $invCols = ['id', 'sku', 'name', 'variant', 'qtyOnHand', 'unitCost', 'unitPrice', 'reorderAt', 'discontinued', 'supplier', 'createdAt', 'updatedAt'];
         $userCols = ['id', 'username', 'password_hash', 'role', 'createdAt'];
         $custCols = ['id', 'name', 'note', 'createdAt'];
         $payCols = ['id', 'customerId', 'amount', 'date', 'note', 'createdAt'];

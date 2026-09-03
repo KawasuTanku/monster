@@ -20,6 +20,7 @@ final class InventoryItem
     public float $unitCost = 0.0;
     public float $unitPrice = 0.0;
     public int $reorderAt = 0;
+    public bool $discontinued = false;
     public string $supplier = '';
     public int $createdAt = 0;
     public int $updatedAt = 0;
@@ -39,6 +40,7 @@ final class InventoryItem
         $t->unitPrice = (float) ($row['unitPrice'] ?? 0);
         $t->reorderAt = (int) ($row['reorderAt'] ?? 0);
         $t->supplier = (string) ($row['supplier'] ?? '');
+        $t->discontinued = (bool) ($row['discontinued'] ?? false);
         $t->createdAt = (int) ($row['createdAt'] ?? time());
         $t->updatedAt = (int) ($row['updatedAt'] ?? time());
         return $t;
@@ -56,6 +58,7 @@ final class InventoryItem
             'unitCost' => round($this->unitCost, 2),
             'unitPrice' => round($this->unitPrice, 2),
             'reorderAt' => $this->reorderAt,
+            'discontinued' => $this->discontinued ? 1 : 0,
             'supplier' => $this->supplier,
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
