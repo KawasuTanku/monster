@@ -5,6 +5,7 @@ declare(strict_types=1);
 /** @var ?string $user */
 /** @var bool $isAdmin */
 use function Monster\e;
+use function Monster\csrfToken;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -51,6 +52,7 @@ use function Monster\e;
             <a href="/settings">Settings</a>
             <span class="user"><?= e($user) ?></span>
             <form method="post" action="/logout" class="logout">
+                <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
                 <button type="submit">Log out</button>
             </form>
         </nav>
