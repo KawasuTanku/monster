@@ -107,6 +107,25 @@ final class TransactionRepository
     {
         return array_values(array_filter($this->all(), static fn(Transaction $t): bool => $t->customerId === $customerId));
     }
+
+    /**
+     * Total units sold for an item since a unix timestamp.
+     * Counts linked sale transactions only.
+     */
+    public function unitsSoldSince(string $itemId, int $since): int
+    {
+        $total = 0;
+        foreach ($this->all() as $t) {
+            if ($t->type === Transaction::TYPE_SALE
+                && $t->itemId === $itemId
+                && $t->createdAt >= $since
+            ) {
+                $total += (int) round($t->qty);
+            }
+        }
+        return $total;
+    }
+
     public function search(string $q): array
     {
         $q = trim($q);
