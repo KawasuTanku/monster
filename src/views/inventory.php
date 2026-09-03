@@ -47,8 +47,8 @@ use function Monster\moneyClass;
         <label>Reorder at
             <input type="number" min="0" step="1" name="reorderAt" value="<?= $edit ? e((string) $edit->reorderAt) : '0' ?>" placeholder="low-stock threshold">
         </label>
-        <label>Discontinued
-            <input type="checkbox" name="discontinued" value="1" <?= $edit && $edit->discontinued ? 'checked' : '' ?>>
+        <label class="inline-checkbox">
+            <input type="checkbox" name="discontinued" value="1" <?= $edit && $edit->discontinued ? 'checked' : '' ?>> Discontinued
         </label>
     </div>
     <div class="row">
