@@ -390,6 +390,11 @@ if ($uri === '/settings') {
         'configured' => $app->auth->isConfigured(),
         'budgets' => $app->storage->getSetting('budgets', []),
         'categories' => $app->txns->categories(),
+        'restockDefaults' => [
+            'safetyDays' => (int) ($app->storage->getSetting('safetyDays') ?? 7),
+            'coverageDays' => (int) ($app->storage->getSetting('coverageDays') ?? 30),
+            'lookbackDays' => (int) ($app->storage->getSetting('lookbackDays') ?? 30),
+        ],
     ]);
 }
 
@@ -425,6 +430,20 @@ if ($uri === '/settings/budgets' && $method === 'POST') {
         }
         $app->storage->setSetting('budgets', $map);
         setFlash('Budgets saved.');
+    }
+    header('Location: /settings'); return;
+}
+
+if ($uri === '/settings/restock-defaults' && $method === 'POST') {
+    if (!$isAdmin) { http_response_code(403); header('Location: /settings'); return; }
+    if (csrfValid($_POST['csrf'] ?? null)) {
+        $safetyDays = max(1, (int) ($_POST['safetyDays'] ?? 7));
+        $coverageDays = max(1, (int) ($_POST['coverageDays'] ?? 30));
+        $lookbackDays = max(1, (int) ($_POST['lookbackDays'] ?? 30));
+        $app->storage->setSetting('safetyDays', $safetyDays);
+        $app->storage->setSetting('coverageDays', $coverageDays);
+        $app->storage->setSetting('lookbackDays', $lookbackDays);
+        setFlash('Restock defaults saved.');
     }
     header('Location: /settings'); return;
 }

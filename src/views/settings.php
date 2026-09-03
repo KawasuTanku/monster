@@ -53,3 +53,25 @@ use function Monster\csrfToken;
     </form>
 </section>
 <?php endif; ?>
+
+<?php if ($isAdmin): ?>
+<section class="card">
+    <h2>Restock defaults</h2>
+    <p class="muted">Default values for sales-driven reorder logic. Applied to all items. Safety days = buffer stock before reordering; coverage days = how many days of sales each restock should cover; lookback days = rolling window to compute sales velocity.</p>
+    <form method="post" action="/settings/restock-defaults" class="form">
+        <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
+        <div class="row">
+            <label>Safety Days
+                <input type="number" min="1" step="1" name="safetyDays" value="<?= e((string) ($restockDefaults['safetyDays'] ?? 7)) ?>" aria-label="Safety days">
+            </label>
+            <label>Coverage Days
+                <input type="number" min="1" step="1" name="coverageDays" value="<?= e((string) ($restockDefaults['coverageDays'] ?? 30)) ?>" aria-label="Coverage days">
+            </label>
+            <label>Lookback Days
+                <input type="number" min="1" step="1" name="lookbackDays" value="<?= e((string) ($restockDefaults['lookbackDays'] ?? 30)) ?>" aria-label="Lookback days">
+            </label>
+        </div>
+        <div class="actions"><button type="submit">Save restock defaults</button></div>
+    </form>
+</section>
+<?php endif; ?>
