@@ -199,8 +199,6 @@ foreach ($items as $i) {
     </table>
     </div>
     <style>
-        tr.hidden-discontinued { display: none; }
-        tr.hidden-discontinued.show { display: table-row; }
         tr.hidden-discontinued td { opacity: 0.6; }
     </style>
     <script>
