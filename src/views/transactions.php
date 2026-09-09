@@ -46,6 +46,7 @@ use function Monster\trashIcon;
                 <select name="itemId" id="itemId">
                     <option value="">— none —</option>
                     <?php foreach ($items as $it): ?>
+                        <?php if ($it->discontinued && $it->qtyOnHand === 0) continue; ?>
                         <option value="<?= e($it->id) ?>" data-price="<?= e(money($it->unitPrice)) ?>" data-cost="<?= e(money($it->unitCost)) ?>"<?= $edit && $edit->itemId === $it->id ? ' selected' : '' ?>><?= e(itemLabel($it)) ?> — $<?= e(money($it->unitPrice)) ?>/can</option>
                     <?php endforeach; ?>
                 </select>
