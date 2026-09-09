@@ -2,7 +2,7 @@
 # monster-status.sh — fetch key metrics from Monster via API
 # Usage:  ./monster-status.sh
 
-MONSTER_URL="https://monster.kawasu.wtf"
+MONSTER_URL="https://monster.warpstrand.com"
 API_KEY=""
 
 # --- fetch revenue / net profit ---
