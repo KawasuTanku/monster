@@ -1,7 +1,7 @@
 # Monster — Energy-Drink P&L Tracker
 
 A small, login-protected **profit & loss tracker** for a side business selling
-energy drinks. Hosted at **monster.kawasu.wtf** behind FrankenPHP (Caddy).
+energy drinks. Hosted at **monster.warpstrand.com** behind Caddy.
 
 ## What it does
 
@@ -73,14 +73,14 @@ php smoke-test.php   # boots php -S, drives the full flow with curl, asserts mar
 
 ## Deploying
 
-The site is served from `/opt/caddy/monster.kawasu.wtf/web` (owned by `frankenphp`).
+The site is served from `/opt/caddy/monster.warpstrand.com/web` (owned by `frankenphp`).
 Run on the server as root / via sudo:
 
 ```bash
 sudo ./deploy.sh
 ```
 
-On first load, visit `https://monster.kawasu.wtf/setup` and create the admin
+On first load, visit `https://monster.warpstrand.com/setup` and create the admin
 account. After that, admins can add co-workers via **Users** in the nav.
 
 ## Users & roles
