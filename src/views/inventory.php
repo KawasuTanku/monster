@@ -65,11 +65,25 @@ use function Monster\moneyClass;
 <?php if (empty($items)): ?>
     <p class="muted">No inventory tracked yet.</p>
 <?php else: ?>
+<?php
+$activeItems = [];
+$hiddenItems = [];
+foreach ($items as $i) {
+    if ($i->discontinued && $i->qtyOnHand === 0) {
+        $hiddenItems[] = $i;
+    } else {
+        $activeItems[] = $i;
+    }
+}
+?>
+<?php if (count($hiddenItems) > 0): ?>
+    <button type="button" id="toggle-discontinued" class="btn" data-count="<?= count($hiddenItems) ?>">Show discontinued (<?= count($hiddenItems) ?>)</button>
+<?php endif; ?>
     <div class="table-wrap">
     <table class="table">
         <thead><tr><th>Name</th><th>Variant</th><th class="num">Qty</th><th class="num">Cost</th><th class="num">Price</th><th class="num">Stock $</th><th class="num">Revenue</th><th class="num">COGS</th><th class="num">Profit</th><th class="num">Days</th><th class="num">Vel.</th><th class="num">Reorder at</th><th class="num">Order qty</th><th class="num">Restock Cost</th><th></th></tr></thead>
         <tbody>
-        <?php foreach ($items as $i): ?>
+        <?php foreach ($activeItems as $i): ?>
             <?php
             $u = $unitsSold[$i->id] ?? 0;
             $daysOfStock = $i->daysOfStock($u, $lookbackDays);
@@ -125,9 +139,91 @@ use function Monster\moneyClass;
                 </td>
             </tr>
         <?php endforeach; ?>
+        <?php foreach ($hiddenItems as $i): ?>
+            <?php
+            $u = $unitsSold[$i->id] ?? 0;
+            $daysOfStock = $i->daysOfStock($u, $lookbackDays);
+            $velocity = $i->salesVelocity($u, $lookbackDays);
+            $suggestedQty = $i->suggestedRestockQty($u, $lookbackDays, $safetyDays, $coverageDays);
+            $needsReorder = $i->needsReorder($u, $lookbackDays, $safetyDays);
+            $restockQty = $i->reorderAt > 0 ? $i->reorderQty() : $suggestedQty;
+            ?>
+            <tr class="hidden-discontinued" hidden>
+                <td data-label="Name"><?= e($i->name) ?><?= $i->sku !== '' ? ' <span class="muted">(' . e($i->sku) . ')</span>' : '' ?><?= $i->discontinued ? ' <span class="muted">(discontinued)</span>' : '' ?></td>
+                <td class="muted" data-label="Variant"><?= e($i->variant) ?></td>
+                <td class="num" data-label="Qty"><?= e((string) $i->qtyOnHand) ?><?= $needsReorder ? ' ⚠' : '' ?></td>
+                <td class="num" data-label="Cost">$<?= money($i->unitCost) ?></td>
+                <td class="num" data-label="Price">$<?= money($i->unitPrice) ?></td>
+                <td class="num" data-label="Stock $">$<?= money($i->stockValue()) ?></td>
+                <?php $p = $pnl[$i->id] ?? null; ?>
+                <td class="num" data-label="Revenue"><?= $p ? '$' . money($p['revenue']) : '—' ?></td>
+                <td class="num" data-label="COGS"><?= $p ? '$' . money($p['cogs']) : '—' ?></td>
+                <td class="num <?= $p ? moneyClass($p['net']) : '' ?>" data-label="Profit"><strong><?= $p ? '$' . money($p['net']) : '—' ?></strong></td>
+                <td class="num" data-label="Days"><?= is_finite($daysOfStock) ? $daysOfStock . 'd' : '—' ?></td>
+                <td class="num" data-label="Vel."><?= $velocity > 0 ? number_format($velocity, 2) . '/d' : '—' ?></td>
+                <td class="num" data-label="Reorder at"><?= $i->reorderAt > 0 ? e((string) $i->reorderAt) : ($i->dynamicReorderPoint($u, $lookbackDays, $safetyDays) > 0 ? e((string) $i->dynamicReorderPoint($u, $lookbackDays, $safetyDays)) . ' (auto)' : '—') ?></td>
+                <td class="num" data-label="Order qty"><?= $restockQty > 0 ? e((string) $restockQty) : '—' ?></td>
+                <?php $rf = 'restock-' . e($i->id); ?>
+                <td class="num restock-cost">
+                    <input type="number" min="0" step="0.01" name="cost" form="<?= $rf ?>" value="<?= money($i->unitCost) ?>" class="cost" title="Cost per can for this restock (defaults to current cost)" aria-label="Restock cost per can">
+                </td>
+                <td class="row-actions">
+                    <a href="/inventory?edit=<?= e($i->id) ?>">edit</a>
+                    <form method="post" action="/inventory/adjust" class="inline">
+                        <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
+                        <input type="hidden" name="id" value="<?= e($i->id) ?>">
+                        <input type="hidden" name="delta" value="-1">
+                        <button type="submit" class="link" title="Sell one">−1</button>
+                    </form>
+                    <form method="post" action="/inventory/adjust" class="inline">
+                        <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
+                        <input type="hidden" name="id" value="<?= e($i->id) ?>">
+                        <input type="hidden" name="delta" value="1">
+                        <button type="submit" class="link" title="Restock one">+1</button>
+                    </form>
+                    <form id="<?= $rf ?>" method="post" action="/inventory/restock" class="inline restock">
+                        <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
+                        <input type="hidden" name="id" value="<?= e($i->id) ?>">
+                        <input type="hidden" name="qty" value="<?= e((string) $restockQty) ?>">
+                        <button type="submit" class="link" title="Restock & log cost">restock</button>
+                    </form>
+                    <form method="post" action="/inventory/delete" class="inline">
+                        <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
+                        <input type="hidden" name="id" value="<?= e($i->id) ?>">
+                        <button type="submit" class="link danger icon-btn" title="Delete" aria-label="Delete"><?= trashIcon() ?></button>
+                    </form>
+                </td>
+            </tr>
+        <?php endforeach; ?>
         </tbody>
     </table>
     </div>
+    <style>
+        tr.hidden-discontinued { display: none; }
+        tr.hidden-discontinued.show { display: table-row; }
+        tr.hidden-discontinued td { opacity: 0.6; }
+    </style>
+    <script>
+        (function() {
+            var btn = document.getElementById('toggle-discontinued');
+            if (!btn) return;
+            btn.addEventListener('click', function() {
+                var rows = document.querySelectorAll('tr.hidden-discontinued');
+                var showing = btn.dataset.showing === '1';
+                rows.forEach(function(r) {
+                    if (showing) { r.hidden = true; delete r.dataset.show; }
+                    else { r.hidden = false; r.dataset.show = '1'; }
+                });
+                if (showing) {
+                    btn.dataset.showing = '0';
+                    btn.textContent = 'Show discontinued (' + btn.dataset.count + ')';
+                } else {
+                    btn.dataset.showing = '1';
+                    btn.textContent = 'Hide discontinued';
+                }
+            });
+        })();
+    </script>
 <?php endif; ?>
 
 <button class="fab" data-form="inv-form" aria-label="Add item">
